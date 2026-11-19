@@ -61,11 +61,6 @@ class ForecastAccuracy:
         table["horizon_bucket"] = pd.Categorical(table["horizon_bucket"], cls.BUCKET_ORDER, ordered=True)
         return table.sort_values(["model", "horizon_bucket"]).reset_index(drop=True)
 
-    @classmethod
-    def by_horizon_day(cls, frame: pd.DataFrame) -> pd.DataFrame:
-        """MAE for each model at each horizon day."""
-        return cls.scores(frame, ["model", "horizon_day"]).sort_values(["model", "horizon_day"]).reset_index(drop=True)
-
     @staticmethod
     def improvement(score: float, baseline: float) -> float:
         """Share by which a score beats the baseline, positive when lower is better."""

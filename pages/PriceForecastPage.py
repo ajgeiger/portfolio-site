@@ -10,7 +10,6 @@ from analytics.forecast.PredictionRuns import PredictionRuns
 from components.CaseStudyHeader import CaseStudyHeader
 from components.forecast.BacktestFanChart import BacktestFanChart
 from components.forecast.ForecastIds import ForecastIds as Ids
-from components.forecast.HorizonErrorChart import HorizonErrorChart
 from components.forecast.KpiCards import KpiCards
 from components.forecast.LeaderboardTable import LeaderboardTable
 from components.forecast.RunDetails import RunDetails
@@ -82,7 +81,6 @@ class PriceForecastPage(AbstractProjectPage):
             className="segmented pill",
             inline=True,
         )
-        by_day = ForecastAccuracy.by_horizon_day(self.backtest)
         return html.Section(
             [
                 SectionHeading().build(
@@ -93,27 +91,14 @@ class PriceForecastPage(AbstractProjectPage):
                 ),
                 html.Div(
                     [
+                        html.Div(id=Ids.LEADERBOARD_TABLE, className="table-wrap flush"),
                         html.Div(
-                            [
-                                html.Div(id=Ids.LEADERBOARD_TABLE, className="table-wrap flush"),
-                                html.Div(
-                                    "MAE, RMSE and bias in dollars per MMBtu, MAPE and WAPE in percent. Bias is "
-                                    "forecast minus actual. The best value in each column is marked.",
-                                    className="panel-note",
-                                ),
-                            ],
-                            className="panel deck-panel",
-                        ),
-                        html.Div(
-                            [
-                                html.H3("Error by day ahead"),
-                                html.Div("Mean absolute error at each horizon", className="panel-subtitle"),
-                                dcc.Graph(figure=HorizonErrorChart().build(by_day), config=self.GRAPH_CONFIG),
-                            ],
-                            className="panel deck-panel",
+                            "MAE, RMSE and bias in dollars per MMBtu, MAPE and WAPE in percent. Bias is "
+                            "forecast minus actual. The best value in each column is marked.",
+                            className="panel-note",
                         ),
                     ],
-                    className="deck-stack",
+                    className="panel deck-panel",
                 ),
             ],
             className="deck-section",

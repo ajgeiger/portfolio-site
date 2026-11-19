@@ -123,7 +123,7 @@ The page presents my [natural-gas-forecasting](https://github.com/ajgeiger/natur
 | Section | What it shows |
 | --- | --- |
 | Top of the page | The question, data and approach, key findings, and cards for champion MAE against naive, MAPE, 80% band coverage, the number of backtest dates and the latest production run. |
-| Model leaderboard | MAE, RMSE, MAPE, WAPE and bias for every candidate model, overall and by horizon bucket (days 1 to 5, 6 to 15, 16 to 30), and MAE at each day ahead. |
+| Model leaderboard | MAE, RMSE, MAPE, WAPE and bias for every candidate model, overall and by horizon bucket (days 1 to 5, 6 to 15, 16 to 30). |
 | Active predictions in production | Every scoring run as a clickable row. Selecting one shows the production path (Chronos-2, registry version 8, with its 80% band) against the staging challenger (gradient boosting, version 9), the forecast at days 1, 10 and 30, and the run details. |
 | Model selection backtests | The rolling-origin backtests used to train, tune and compare the model families. A slider over all 125 as-of dates shows the price history, the Chronos-2 forecast with its band, a second model of your choice and the actuals, with each model's MAE for that date. |
 
