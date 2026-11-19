@@ -3,6 +3,7 @@
 from dash import html
 
 from components.ExplorerIds import ExplorerIds
+from components.SearchBox import SearchBox
 from config.Formats import Formats
 
 
@@ -13,7 +14,7 @@ class SidePanel:
         """Build the panel from a dictionary prepared by the page.
 
         Expected keys: kind, name, keyword_name, renamed, count, share, share_label,
-        parent_share, parent_name, keywords, largest_topics, examples, article.
+        parent_share, parent_name, keywords, largest_topics, article.
         """
         sections = []
         if details.get("article"):
@@ -29,9 +30,21 @@ class SidePanel:
             sections.append(self.section("Keywords behind the label", self.chips(details["keywords"])))
         if details["largest_topics"]:
             sections.append(self.section("Largest topics in this group", self.topic_list(details["largest_topics"])))
-        if details["examples"]:
-            sections.append(self.section("Example headlines", self.example_list(details["examples"])))
         return sections
+
+    @staticmethod
+    def article_section() -> html.Div:
+        """Searchable list of articles in the current view, kept outside the rebuilt details."""
+        return html.Div(
+            [
+                html.Div("Articles in this view", className="side-section-title"),
+                SearchBox().build(ExplorerIds.ARTICLE_SEARCH, "Search articles", kind="input"),
+                html.Div(id=ExplorerIds.ARTICLE_SEARCH_NOTE, className="side-subtle article-search-note"),
+                html.Div(id=ExplorerIds.ARTICLE_LIST, className="example-list"),
+            ],
+            id=ExplorerIds.ARTICLE_SECTION,
+            className="side-section article-search-section",
+        )
 
     @staticmethod
     def section(title: str, body) -> html.Div:
@@ -90,7 +103,9 @@ class SidePanel:
         return html.Div(rows, className="topic-list")
 
     @staticmethod
-    def example_list(examples: list[dict]) -> html.Div:
+    def example_list(examples: list[dict]) -> list:
+        if not examples:
+            return [html.Div("No matching articles.", className="side-subtle")]
         rows = []
         for example in examples:
             rows.append(
@@ -108,7 +123,7 @@ class SidePanel:
                     n_clicks=0,
                 )
             )
-        return html.Div(rows, className="example-list")
+        return rows
 
     @staticmethod
     def article_detail(article: dict) -> html.Div:

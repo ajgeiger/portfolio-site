@@ -65,7 +65,7 @@ def test_back_home_and_breadcrumbs(page):
 def test_renamed_labels_show_up_in_the_view(page):
     state = page.next_state(ExplorerIds.SEARCH, "topic_4", page.start_state(), 2)
     output = render(page, state, labels={"topic_4": "Weather alerts"})
-    assert output[-1] == "Weather alerts"
+    assert output[12] == "Weather alerts"
 
 
 def test_filters_change_the_counts(page):

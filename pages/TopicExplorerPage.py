@@ -1,9 +1,11 @@
 """The topic explorer: what is the news talking about, and how much coverage does each theme get?"""
 
+import pandas as pd
 import plotly.graph_objects as go
 from dash import ALL, Dash, Input, Output, State, callback_context, dcc, html, no_update
 
 from analytics.ArticleFilter import ArticleFilter
+from analytics.ArticleSearch import ArticleSearch
 from analytics.CoverageSummary import CoverageSummary
 from analytics.ExplorerQuery import ExplorerQuery
 from analytics.InsightWriter import InsightWriter
@@ -48,6 +50,7 @@ class TopicExplorerPage(AbstractProjectPage):
     )
 
     GRANULARITY_NAMES = {"hour": "Hourly", "day": "Daily", "week": "Weekly"}
+    ARTICLE_LIST_LIMIT = 20
 
     FILTER_INPUTS = [
         Input(Ids.DATE_RANGE, "start_date"),
@@ -65,6 +68,7 @@ class TopicExplorerPage(AbstractProjectPage):
         self.rising = RisingTopics(self.query.last_load_time)
         self.graph = TopicGraph()
         self.side_panel = SidePanel()
+        self.article_search = ArticleSearch()
         self.navigation = NavigationBar()
         self.summary_cards = SummaryCards()
         self.insight_writer = InsightWriter()
@@ -77,6 +81,7 @@ class TopicExplorerPage(AbstractProjectPage):
             [
                 dcc.Store(id=Ids.VIEW_STATE, data=self.start_state()),
                 dcc.Store(id=Ids.LABELS, data={}, storage_type="memory"),
+                dcc.Store(id=Ids.ARTICLE_EXAMPLES, data=[]),
                 dcc.Download(id=Ids.DOWNLOAD),
                 CaseStudyHeader().build(self.project, self.highlights(), self.key_findings(), self.EXPLORER_ANCHOR),
                 self.header(),
@@ -97,7 +102,10 @@ class TopicExplorerPage(AbstractProjectPage):
                             ],
                             className="panel graph-panel",
                         ),
-                        html.Aside([html.Div(id=Ids.SIDE_PANEL), self.rename_block()], className="panel side-panel"),
+                        html.Aside(
+                            [html.Div(id=Ids.SIDE_PANEL), SidePanel.article_section(), self.rename_block()],
+                            className="panel side-panel",
+                        ),
                     ],
                     className="main-grid",
                 ),
@@ -292,6 +300,8 @@ class TopicExplorerPage(AbstractProjectPage):
             Output(Ids.RENAME_COUNT, "children"),
             Output(Ids.FILTER_NOTE, "children"),
             Output(Ids.SELECTION_TITLE, "children"),
+            Output(Ids.ARTICLE_EXAMPLES, "data"),
+            Output(Ids.ARTICLE_SECTION, "style"),
             Input(Ids.VIEW_STATE, "data"),
             *self.FILTER_INPUTS,
             Input(Ids.BRANCHES, "value"),
@@ -321,6 +331,13 @@ class TopicExplorerPage(AbstractProjectPage):
             Input(Ids.SEARCH, "search_value"),
             State(Ids.LABELS, "data"),
         )(self.search_options)
+
+        app.callback(
+            Output(Ids.ARTICLE_LIST, "children"),
+            Output(Ids.ARTICLE_SEARCH_NOTE, "children"),
+            Input(Ids.ARTICLE_EXAMPLES, "data"),
+            Input(Ids.ARTICLE_SEARCH, "value"),
+        )(self.filter_articles)
 
         app.callback(
             Output(Ids.LABELS, "data"),
@@ -452,9 +469,8 @@ class TopicExplorerPage(AbstractProjectPage):
             self.hub(key, name, count, share, summary),
             self.branch_cards(key, count, articles, counts, summary, branches, label_store, state.get("article")),
         )
-        panel = self.side_panel.build(
-            self.panel_details(path, articles, counts, summary, label_store, state.get("article"))
-        )
+        details = self.panel_details(path, articles, counts, summary, label_store, state.get("article"))
+        panel = self.side_panel.build(details)
         crumbs = NavigationBar.breadcrumbs([self.query.name(step, label_store) for step in path])
         cards = self.summary_cards.build(summary, key)
         insight = self.insight(articles, counts, summary, label_store)
@@ -475,6 +491,8 @@ class TopicExplorerPage(AbstractProjectPage):
             else ""
         )
         back_disabled = len(path) == 1 and not state.get("article")
+        examples = self.serial_examples(details["examples"])
+        article_section_style = {} if examples else {"display": "none"}
         return (
             elements,
             panel,
@@ -489,6 +507,8 @@ class TopicExplorerPage(AbstractProjectPage):
             rename_count,
             filter_note,
             name,
+            examples,
+            article_section_style,
         )
 
     def hub(self, key: str, name: str, count: int, share: float, summary: CoverageSummary) -> dict:
@@ -573,7 +593,7 @@ class TopicExplorerPage(AbstractProjectPage):
             "parent_share": 0.0,
             "keywords": self.query.keywords(key)[:10],
             "largest_topics": [],
-            "examples": self.query.headlines(key, articles, 3),
+            "examples": self.query.headlines(key, articles, self.ARTICLE_LIST_LIMIT),
             "article": self.query.article(article_id) if article_id else None,
         }
         if len(path) > 1:
@@ -663,6 +683,28 @@ class TopicExplorerPage(AbstractProjectPage):
         return figure
 
     # Search, labels and controls
+
+    @staticmethod
+    def serial_examples(examples: list[dict]) -> list[dict]:
+        """Store-friendly copies of headline dicts, with dates as ISO strings."""
+        rows = []
+        for example in examples:
+            row = dict(example)
+            published = row.get("published_at")
+            if published is not None and not isinstance(published, str):
+                row["published_at"] = None if pd.isna(published) else published.isoformat()
+            rows.append(row)
+        return rows
+
+    def filter_articles(self, examples, query):
+        """Apply the typed article search to the current list."""
+        examples = examples or []
+        kept = self.article_search.apply(examples, query)
+        if query and str(query).strip() and examples:
+            note = f"{len(kept)} of {len(examples)}" if kept else "No articles match"
+        else:
+            note = ""
+        return SidePanel.example_list(kept), note
 
     def search_options(self, search_value, labels):
         if not search_value:

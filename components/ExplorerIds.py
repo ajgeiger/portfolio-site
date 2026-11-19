@@ -26,6 +26,11 @@ class ExplorerIds:
     BREADCRUMBS = "explorer-breadcrumbs"
     CRUMB = "explorer-crumb"
     SEARCH = "explorer-search"
+    ARTICLE_SEARCH = "explorer-article-search"
+    ARTICLE_SEARCH_NOTE = "explorer-article-search-note"
+    ARTICLE_LIST = "explorer-article-list"
+    ARTICLE_SECTION = "explorer-article-section"
+    ARTICLE_EXAMPLES = "explorer-article-examples"
 
     GRAPH = "explorer-graph"
     ZOOM_IN = "explorer-zoom-in"

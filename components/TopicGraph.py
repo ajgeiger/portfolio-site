@@ -30,6 +30,7 @@ class TopicGraph:
                 "background-fit": "contain",
                 "background-opacity": 0,
                 "border-width": 0,
+                "corner-radius": 10,
                 "label": "",
             },
         },

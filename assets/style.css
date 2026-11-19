@@ -241,6 +241,12 @@ a { color: var(--accent); }
 .search-wrap .dash-dropdown { border: none; background: transparent; border-radius: var(--radius-pill); box-shadow: none; }
 .search-wrap .dash-dropdown:focus { border: none; outline: none; }
 .search-wrap .dash-dropdown-content { border-radius: var(--radius); }
+.search-wrap .search-input,
+.search-wrap input[type="search"] { flex: 1; width: 100%; min-width: 0; height: 32px; border: none; outline: none; background: transparent; padding: 0; font-family: var(--font); font-size: 13px; color: var(--ink); }
+.search-wrap input[type="search"]::-webkit-search-decoration { display: none; }
+.article-search-section .search-wrap { width: 100%; min-width: 0; margin: 8px 0 6px; }
+.article-search-note { margin-bottom: 6px; }
+.article-search-note:empty { display: none; }
 
 
 /* Side panel */
