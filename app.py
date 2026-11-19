@@ -8,12 +8,13 @@ Usage:
 from config.Settings import Settings
 from pages.HomePage import HomePage
 from pages.ProjectsPage import ProjectsPage
+from pages.ResumePage import ResumePage
 from portfolio.PortfolioApp import PortfolioApp
 from portfolio.ProjectRegistry import ProjectRegistry
 
 settings = Settings()
 registry = ProjectRegistry.default(settings)
-portfolio = PortfolioApp([HomePage(registry), ProjectsPage(registry), *registry.pages()])
+portfolio = PortfolioApp([HomePage(registry), ProjectsPage(registry), ResumePage(), *registry.pages()])
 server = portfolio.server
 
 if __name__ == "__main__":

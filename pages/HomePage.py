@@ -1,8 +1,9 @@
-"""The home page: who Alex is, how he works, and why the projects are worth a look."""
+"""The home page: who Alex is, how he works, and the projects on the site."""
 
 from dash import Dash, dcc, html
 
 from components.ProjectCard import ProjectCard
+from components.ResumeLink import ResumeLink
 from config.Profile import Profile
 from pages.AbstractPage import AbstractPage
 from portfolio.ProjectRegistry import ProjectRegistry
@@ -14,7 +15,7 @@ class HomePage(AbstractPage):
     path = "/"
     name = "Home"
     title = Profile.ROLE
-    description = "Analytics and machine learning projects by Alex Geiger, Lead Data Scientist."
+    description = "Analytics and machine learning projects by Alex Geiger, Lead Applied AI Scientist."
 
     WAYS_OF_WORKING = [
         (
@@ -45,26 +46,20 @@ class HomePage(AbstractPage):
         )
 
     def hero(self) -> html.Section:
-        first_project = self.registry.projects[0]
         return html.Section(
             html.Div(
                 [
                     html.Div(Profile.ROLE.upper(), className="eyebrow light"),
-                    html.H1("I turn large, messy data into decisions people can act on.", className="hero-title"),
+                    html.H1("Machine learning for forecasting, pricing and analytics.", className="hero-title"),
                     html.P(
-                        "I build analytics end to end: data engineering, forecasting, pricing and machine learning "
-                        "that runs in production under proper governance. This site shows that way of working on open "
-                        "data, with live projects you can explore and the code behind them.",
+                        f"I am {Profile.NAME}, {Profile.ROLE} at {Profile.EMPLOYER}. This site collects projects I "
+                        "build on open data. Each one has a live app, a short write up and the code behind it.",
                         className="hero-lead",
                     ),
                     html.Div(
                         [
                             dcc.Link("Explore the projects \u2192", href="/projects", className="button primary large"),
-                            dcc.Link(
-                                f"Open the {first_project.title}",
-                                href=first_project.route,
-                                className="button ghost large",
-                            ),
+                            ResumeLink().build("button ghost large"),
                         ],
                         className="hero-actions",
                     ),
@@ -75,15 +70,18 @@ class HomePage(AbstractPage):
         )
 
     def background(self) -> html.Section:
-        areas = ", ".join(Profile.PLATFORM_AREAS[:-1]) + " and " + Profile.PLATFORM_AREAS[-1]
         items = [
-            ("Role", Profile.ROLE, "Leading data science from problem framing to deployed systems."),
+            (
+                "Current role",
+                Profile.ROLE,
+                f"At {Profile.EMPLOYER} since {Profile.ROLE_SINCE}. Senior Data Scientist there from May 2022.",
+            ),
             (
                 "Enterprise AI platform",
-                "Signature Aviation",
-                f"Built and led the company's enterprise AI platform, covering {areas}.",
+                Profile.EMPLOYER,
+                f"Built and lead the company's enterprise AI platform, covering {Profile.platform_areas()}.",
             ),
-            ("Education", "Syracuse University", f"{Profile.EDUCATION}."),
+            ("Education", Profile.SCHOOL, f"{Profile.DEGREE}."),
         ]
         cards = [
             html.Div(
@@ -93,7 +91,14 @@ class HomePage(AbstractPage):
         ]
         return html.Section(
             html.Div(
-                [html.H2("Background", className="section-title"), html.Div(cards, className="credential-grid")],
+                [
+                    html.H2("Background", className="section-title"),
+                    html.Div(cards, className="credential-grid"),
+                    html.Div(
+                        dcc.Link("Read the resume \u2192", href="/resume", className="text-link"),
+                        className="below-link",
+                    ),
+                ],
                 className="section-inner",
             ),
             className="section",
@@ -104,7 +109,7 @@ class HomePage(AbstractPage):
         heading = html.Div(
             [
                 html.Div("FEATURED WORK", className="eyebrow"),
-                html.H2("Projects you can use, not just read about", className="section-title"),
+                html.H2("Featured project", className="section-title"),
                 html.P(
                     "Each project is a working app on real data, with a short case study and method notes. "
                     "The numbers below are read from the data when the site starts.",
@@ -138,19 +143,19 @@ class HomePage(AbstractPage):
         )
 
     def about(self) -> html.Section:
-        areas = ", ".join(Profile.PLATFORM_AREAS[:-1]) + " and " + Profile.PLATFORM_AREAS[-1]
         about = html.Div(
             [
                 html.H2("About", className="section-title"),
                 html.P(
-                    f"I am {Profile.NAME}, a {Profile.ROLE.lower()}. At Signature Aviation I built and led the "
-                    f"enterprise AI platform, covering {areas}. I studied data science at the graduate level at "
-                    "Syracuse University."
+                    f"I am {Profile.NAME}, {Profile.ROLE} at {Profile.EMPLOYER}, where I built and lead the "
+                    f"enterprise AI platform covering {Profile.platform_areas()}. Before that I was a data scientist "
+                    f"at GHD and VyStar Credit Union. I hold a {Profile.DEGREE} from {Profile.SCHOOL}."
                 ),
                 html.P(
-                    "This portfolio applies the same habits to open data: clear questions, careful method notes and "
+                    "The projects here apply the same habits to open data: a clear question, careful method notes and "
                     "code that is built to last."
                 ),
+                html.Div(ResumeLink().build("button"), className="project-actions"),
             ],
             id="about",
             className="about-block",
@@ -158,7 +163,7 @@ class HomePage(AbstractPage):
         contact = html.Div(
             [
                 html.H2("Contact", className="section-title"),
-                html.P("The quickest way to see more of my work or get in touch is through these profiles."),
+                html.P("My code and competition work are on GitHub and Kaggle."),
                 html.Div(
                     [
                         html.A(
