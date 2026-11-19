@@ -6,19 +6,20 @@ import dash
 from dash import Dash, Input, Output
 
 from components.AppShell import AppShell
+from config.Profile import Profile
 from pages.AbstractPage import AbstractPage
 
 ASSETS_FOLDER = Path(__file__).resolve().parents[1] / "assets"
 
 
 class PortfolioApp:
-    """A multi page Dash app. Each page brings its own layout and callbacks."""
+    """A multi page Dash website. Each page brings its own layout and callbacks."""
 
-    TITLE = "Alex Geiger | Analytics Portfolio"
+    TITLE = Profile.SITE_TITLE
 
     def __init__(self, pages: list[AbstractPage]):
         self.pages = pages
-        self.shell = AppShell(pages)
+        self.shell = AppShell()
         self.app = Dash(
             __name__,
             use_pages=True,
@@ -32,7 +33,7 @@ class PortfolioApp:
                 page.module_name,
                 path=page.path,
                 name=page.name,
-                title=f"{page.title} | {self.TITLE}",
+                title=f"{page.title} | {Profile.NAME}",
                 description=page.description,
                 order=order,
                 layout=page.layout(),

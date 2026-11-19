@@ -1,4 +1,4 @@
-"""Start the portfolio app.
+"""Start the portfolio website.
 
 Usage:
     python build_cache.py   (once, or after the topic model is refit)
@@ -6,12 +6,14 @@ Usage:
 """
 
 from config.Settings import Settings
-from data.HeadlineRadarDataSource import HeadlineRadarDataSource
-from pages.TopicExplorerPage import TopicExplorerPage
+from pages.HomePage import HomePage
+from pages.ProjectsPage import ProjectsPage
 from portfolio.PortfolioApp import PortfolioApp
+from portfolio.ProjectRegistry import ProjectRegistry
 
 settings = Settings()
-portfolio = PortfolioApp([TopicExplorerPage(HeadlineRadarDataSource(settings), settings)])
+registry = ProjectRegistry.default(settings)
+portfolio = PortfolioApp([HomePage(registry), ProjectsPage(registry), *registry.pages()])
 server = portfolio.server
 
 if __name__ == "__main__":

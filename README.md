@@ -1,14 +1,41 @@
-# News Topic Explorer
+# Alex Geiger, Lead Data Scientist: Portfolio Site
+
+A personal portfolio website built in Plotly Dash. It presents who I am and how I work, then lets visitors open live analytics projects on real data. The first project is the **News Topic Explorer**: 41,371 news articles grouped into 283 topics by Headline Radar, my own BERTopic style topic model, turned into a map you can walk from the whole corpus down to single headlines.
+
+**[Run it in three commands](#run-it)** &nbsp;\|&nbsp; [The website](#the-website) &nbsp;\|&nbsp; [Add a project](#add-a-project) &nbsp;\|&nbsp; [News Topic Explorer](#news-topic-explorer) &nbsp;\|&nbsp; [Data flow](#data-flow) &nbsp;\|&nbsp; [Sources](#sources)
+
+![Home page: hero, background, featured project, how I work, about and contact](docs/images/home.png)
+
+## The website
+
+| Address | Page | What it does |
+| --- | --- | --- |
+| `/` | Home | Hero with the value proposition, background (Lead Data Scientist, the Signature Aviation enterprise AI platform, Syracuse University), featured projects with numbers read from their data, how I work, about and contact. |
+| `/projects` | Projects | One card per registered project: screenshot, summary, tags, headline numbers, a link to the live page and to the code. |
+| `/projects/news-topic-explorer` | News Topic Explorer | A short case study (question, data, approach, key findings) above the live explorer. |
+
+Every page shares a sticky header (Home, Projects, About, Contact), a footer with GitHub and Kaggle links, and a layout that adapts down to phone width. Numbers on the home and projects pages are computed from each project's data when the site starts, so they never drift from the app.
+
+![Projects index](docs/images/projects.png)
+
+![Case study header on the project page](docs/images/project_page.png)
+
+## Add a project
+
+Projects come from `ProjectRegistry`. Adding one takes two steps and no changes to the home page, the projects index or the navigation:
+
+1. Write a page class that extends `AbstractProjectPage`. It needs `layout()`, `register_callbacks(app)` and `highlights()`, a short list of `(value, label)` numbers for its card.
+2. Add one `Project` entry to `ProjectRegistry.default_projects` with a slug, title, summary, question, data, approach, tags, a thumbnail in `assets/images/`, the repository link and a `build_page` function that returns the page.
+
+The project then appears on the home page, on `/projects` and at `/projects/<slug>`.
+
+## News Topic Explorer
 
 **What is the news talking about, and how much coverage does each theme get?**
 
-An interactive Plotly Dash app that turns 41,371 news articles into a map you can walk through: start from the whole corpus, open one theme at a time, and end on the actual headlines. It is the first page of my analytics portfolio app and reads the fitted results of Headline Radar, my own BERTopic style topic model.
+![Live explorer: every article in the hub, the six largest themes around it](docs/images/landing.png)
 
-**[Run it in three commands](#run-it)** &nbsp;\|&nbsp; [Data flow](#data-flow) &nbsp;\|&nbsp; [Code highlights](#code-highlights) &nbsp;\|&nbsp; [Sources](#sources)
-
-![Landing view: every article in the hub, the six largest themes around it](docs/images/landing.png)
-
-## Why it matters
+### Why it matters
 
 Newsrooms, comms teams and analysts all face the same problem: thousands of headlines a day and no time to read them. A topic model can sort them, but a table of 283 keyword lists is not an answer anyone can act on. This explorer presents the model the way a consultant would present a topic analysis:
 
@@ -17,7 +44,7 @@ Newsrooms, comms teams and analysts all face the same problem: thousands of head
 * **Time aware.** News moves by the hour, so every selection comes with its trend, its source mix and a rising and fading view.
 * **Human labels.** Keyword names are a starting point. Analysts can rename them in the app and export the labels back to the pipeline.
 
-## What it shows
+### What it shows
 
 | View | What you learn |
 | --- | --- |
@@ -45,7 +72,7 @@ Newsrooms, comms teams and analysts all face the same problem: thousands of head
 
 ![Method notes](docs/images/method_notes.png)
 
-### Key numbers from the current fit
+#### Key numbers from the current fit
 
 | Measure | Value |
 | --- | --- |
@@ -64,7 +91,7 @@ Newsrooms, comms teams and analysts all face the same problem: thousands of head
 * **A tree that reads well.** Raw c-TF-IDF profiles share so few exact words that Ward linkage on them collapses into one long chain. `TopicTreeBuilder` first projects the profiles onto 30 latent themes (truncated SVD), scales them to unit length so distance follows cosine similarity, then merges with Ward. The top level went from one branch holding 93% of articles to six balanced themes.
 * **Names weighted by size.** `KeywordNamer` combines each topic's keywords, weighted by article count, so larger topics drive the group name. A group never reuses a name from inside its own branch, so breadcrumbs always read as distinct steps.
 * **Pluggable data.** Pages talk to `AbstractDataSource`. `HeadlineRadarDataSource` serves the cache, and `FrameDataSource` serves in memory tables for tests. A new dataset only needs a new source.
-* **Pluggable pages.** `PortfolioApp` registers any list of `AbstractPage` objects as Dash pages inside one shared shell, and the navigation builds itself from them.
+* **Pluggable pages.** `PortfolioApp` registers any list of `AbstractPage` objects as Dash pages inside one shared `AppShell`. Project pages come from `ProjectRegistry`, and the home and projects pages build their cards from the same registry.
 * **Fast callbacks.** Filters are one boolean mask over 41k rows, branch counts are sums over precomputed topic lists, and a full view renders in about 30 ms.
 * **Small, readable classes.** One class per file, named after the file. Analytics classes have no Dash imports, so they are easy to test and reuse.
 
@@ -92,7 +119,10 @@ flowchart LR
     DS --> EQ["ExplorerQuery"]
     EQ --> AN["TopicTree, TopicTrend, RisingTopics, SourceMix, TopicSearch, LabelStore"]
     AN --> PG["TopicExplorerPage"]
-    PG --> APP["PortfolioApp"]
+    PG --> REG["ProjectRegistry"]
+    REG --> HOME["HomePage and ProjectsPage"]
+    REG --> APP["PortfolioApp"]
+    HOME --> APP
     PG --> EX["topic_labels.json and .csv"]
 ```
 
@@ -121,15 +151,15 @@ Tests use small hand made fixtures, never the real corpus.
 ### Repository layout
 
 ```text
-app.py                  start the portfolio app
+app.py                  start the portfolio website
 build_cache.py          build the cache from Headline Radar outputs
-config/                 Settings, Theme, Formats
+config/                 Settings, Profile, Theme, Formats
 data/                   readers, CacheBuilder and data sources
 analytics/              tree building, navigation, trends, search, labels
-components/             cards, graph, side panel, charts, shell, notes
-pages/                  AbstractPage and TopicExplorerPage
-portfolio/              PortfolioApp
-assets/style.css        the shared theme
+components/             site shell, project cards, case study header, explorer parts
+pages/                  AbstractPage, AbstractProjectPage, HomePage, ProjectsPage, TopicExplorerPage
+portfolio/              PortfolioApp, Project, ProjectRegistry
+assets/                 style.css, anchor_scroll.js and project thumbnails
 tests/                  pytest suite with small fixtures
 docs/images/            screenshots captured from the running app
 ```

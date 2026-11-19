@@ -8,8 +8,8 @@ from dash import Dash
 class AbstractPage(ABC):
     """A page knows its address, its layout and its own callbacks.
 
-    To add a page, subclass this, then list the new page in PortfolioApp.
-    The shared header picks up its name automatically.
+    Site pages (home, projects) are listed in app.py. Project pages extend
+    AbstractProjectPage and come from the ProjectRegistry.
     """
 
     path = "/"

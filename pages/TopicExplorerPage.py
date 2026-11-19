@@ -13,6 +13,7 @@ from analytics.SourceMix import SourceMix
 from analytics.TopicSearch import TopicSearch
 from analytics.TopicTrend import TopicTrend
 from components.CardSvg import CardSvg
+from components.CaseStudyHeader import CaseStudyHeader
 from components.ExplorerIds import ExplorerIds as Ids
 from components.FilterBar import FilterBar
 from components.MethodNotesModal import MethodNotesModal
@@ -27,10 +28,11 @@ from config.Formats import Formats
 from config.Settings import Settings
 from config.Theme import Theme
 from data.AbstractDataSource import AbstractDataSource
-from pages.AbstractPage import AbstractPage
+from pages.AbstractProjectPage import AbstractProjectPage
+from portfolio.Project import Project
 
 
-class TopicExplorerPage(AbstractPage):
+class TopicExplorerPage(AbstractProjectPage):
     """Start from every article and drill down one level at a time to real headlines.
 
     The page state is a breadcrumb path of node keys plus an optional selected
@@ -38,10 +40,7 @@ class TopicExplorerPage(AbstractPage):
     and charts always describe the same set of articles.
     """
 
-    path = "/"
-    name = "Topic Explorer"
-    title = "News Topic Explorer"
-    description = "What is the news talking about, and how much coverage does each theme get?"
+    EXPLORER_ANCHOR = "explorer"
 
     GRAPH_HINT = (
         "Click a card to go one level down. Drag to move, scroll or use + and \u2212 to zoom. "
@@ -57,7 +56,8 @@ class TopicExplorerPage(AbstractPage):
         Input(Ids.SOURCES, "value"),
     ]
 
-    def __init__(self, data_source: AbstractDataSource, settings: Settings | None = None):
+    def __init__(self, project: Project, data_source: AbstractDataSource, settings: Settings | None = None):
+        super().__init__(project)
         self.settings = settings or Settings()
         self.query = ExplorerQuery(data_source, self.settings.random_state)
         self.search_index = TopicSearch(data_source.tree())
@@ -78,6 +78,7 @@ class TopicExplorerPage(AbstractPage):
                 dcc.Store(id=Ids.VIEW_STATE, data=self.start_state()),
                 dcc.Store(id=Ids.LABELS, data={}, storage_type="memory"),
                 dcc.Download(id=Ids.DOWNLOAD),
+                CaseStudyHeader().build(self.project, self.highlights(), self.key_findings(), self.EXPLORER_ANCHOR),
                 self.header(),
                 FilterBar().build(
                     self.query.articles,
@@ -135,28 +136,83 @@ class TopicExplorerPage(AbstractPage):
                 ),
                 MethodNotesModal().build(self.query.metadata),
             ],
-            className="explorer",
+            className="explorer project-page",
         )
 
     def header(self) -> html.Section:
+        """The title row of the live explorer, with the insight line and the method notes button."""
         metadata = self.query.metadata
-        source_count = self.query.articles["source"].nunique()
         subtitle = (
-            f"{Formats.count(metadata['article_rows'])} articles from {Formats.count(source_count)} sources, "
-            f"grouped into {Formats.count(metadata['topic_count'])} topics by a fitted topic model. "
-            f"Last load {Formats.date_time(metadata['last_load_time'])}."
+            "Start from every article and open one theme at a time, down to the headlines. "
+            f"Data last loaded {Formats.date_time(metadata['last_load_time'])}."
         )
         intro = html.Div(
             [
-                html.Div("NEWS COVERAGE ANALYSIS \u00b7 HEADLINE RADAR", className="eyebrow"),
-                html.H1("What is the news talking about?", className="page-title"),
+                html.Div("LIVE EXPLORER", className="eyebrow"),
+                html.H2("Explore the coverage yourself", className="section-title"),
                 html.P(subtitle, className="page-subtitle"),
                 html.Div(id=Ids.INSIGHT, className="insight"),
             ],
             className="page-intro",
         )
         notes_button = html.Button("How to read this", id=Ids.NOTES_OPEN, className="notes-button", n_clicks=0)
-        return html.Section([intro, notes_button], className="page-header")
+        return html.Section([intro, notes_button], className="page-header", id=self.EXPLORER_ANCHOR)
+
+    # Project summary
+
+    def highlights(self) -> list[tuple[str, str]]:
+        metadata = self.query.metadata
+        summary = CoverageSummary.from_articles(self.query.articles)
+        return [
+            (Formats.count(metadata["article_rows"]), "news articles"),
+            (Formats.count(metadata["topic_count"]), "topics found by the model"),
+            (Formats.count(self.query.articles["source"].nunique()), "news sources"),
+            (Formats.percent(summary.unassigned_share), "shown as unassigned, not hidden"),
+        ]
+
+    def key_findings(self) -> list[str]:
+        """Plain language findings, computed from the data each time the app starts."""
+        articles = self.query.articles
+        metadata = self.query.metadata
+        summary = CoverageSummary.from_articles(articles)
+        counts = self.query.topic_counts(articles)
+        themes = self.query.branch_keys(ExplorerQuery.ASSIGNED, self.settings.default_branches, counts, summary)
+        theme_counts = [self.query.count(theme, counts, summary) for theme in themes]
+        top_share = Formats.percent(summary.share(theme_counts[0], summary.rows_with_text))
+        top_three_share = Formats.percent(summary.share(sum(theme_counts[:3]), summary.rows_with_text))
+        repeat_share = Formats.percent(metadata["repeat_text_rows"] / max(metadata["article_rows"], 1))
+        findings = [
+            f"Coverage splits into {len(themes)} broad themes. The largest, keyword labeled "
+            f"\u201c{self.query.keyword_name(themes[0])}\u201d, holds {top_share} of articles with text, "
+            f"and the three largest together hold {top_three_share}, so no single theme dominates.",
+            f"{Formats.percent(summary.unassigned_share)} of articles with text fit no topic: one off or vague "
+            "stories. The explorer counts them openly instead of dropping them.",
+            f"{repeat_share} of rows repeat a headline that already appears, mostly syndicated copies, so counts "
+            "measure coverage rather than unique stories.",
+        ]
+        rising_finding = self.rising_finding(articles)
+        return findings + ([rising_finding] if rising_finding else [])
+
+    def rising_finding(self, articles) -> str | None:
+        """Describe the fastest rising topic, and say so plainly when it is one syndicated headline."""
+        window = self.rising.choose_window(articles)
+        rising = self.rising.compare(articles, window)
+        if not len(rising) or rising.iloc[0]["change_points"] <= 0:
+            return None
+        topic = int(rising.iloc[0]["topic_id"])
+        rows = articles[articles["topic_id"] == topic]
+        period = window.label.split(" vs ")[0].lower()
+        if rows["title"].nunique() == 1:
+            source_count = rows["source"].nunique()
+            outlets = "a single outlet" if source_count == 1 else Formats.amount(source_count, "outlet")
+            return (
+                f"The fastest rising topic over the {period} is a single headline repeated "
+                f"{Formats.count(len(rows))} times by {outlets}. Rising share can mean wide syndication, "
+                "not a developing story."
+            )
+        name = self.query.keyword_name(self.query.tree.topic_key(topic))
+        change = Formats.points(float(rising.iloc[0]["change_points"]))
+        return f"The fastest rising topic over the {period} is \u201c{name}\u201d, up {change} of share."
 
     @staticmethod
     def chart_panel(title, subtitle, control, chart_id: str, note_id: str, class_name: str = "panel") -> html.Div:

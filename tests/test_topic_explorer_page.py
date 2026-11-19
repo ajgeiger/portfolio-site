@@ -2,14 +2,11 @@ import pytest
 
 from analytics.ExplorerQuery import ExplorerQuery
 from components.ExplorerIds import ExplorerIds
-from config.Settings import Settings
-from pages.TopicExplorerPage import TopicExplorerPage
-from portfolio.PortfolioApp import PortfolioApp
 
 
 @pytest.fixture
-def page(data_source):
-    return TopicExplorerPage(data_source, Settings())
+def page(registry, project):
+    return registry.page(project)
 
 
 def graph_nodes(output):
@@ -20,10 +17,18 @@ def render(page, state, branches=2, labels=None):
     return page.render_view(state, None, None, [], [], branches, labels or {})
 
 
-def test_app_builds_with_the_page(page):
-    portfolio = PortfolioApp([page])
-    assert portfolio.app.title == "Alex Geiger | Analytics Portfolio"
+def test_page_lives_under_projects(page):
+    assert page.path == "/projects/news-topic-explorer"
     assert page.layout() is not None
+
+
+def test_highlights_and_findings_come_from_the_data(page, articles):
+    values = dict((label, value) for value, label in page.highlights())
+    assert values["news articles"] == str(len(articles))
+    assert values["topics found by the model"] == "5"
+    findings = page.key_findings()
+    assert len(findings) >= 3
+    assert all(isinstance(finding, str) and finding for finding in findings)
 
 
 def test_drill_down_from_all_topics_to_a_headline(page):

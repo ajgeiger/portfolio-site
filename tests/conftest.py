@@ -6,7 +6,11 @@ from scipy import sparse
 
 from analytics.KeywordNamer import KeywordNamer
 from analytics.TopicTreeBuilder import TopicTreeBuilder
+from config.Settings import Settings
 from data.FrameDataSource import FrameDataSource
+from pages.TopicExplorerPage import TopicExplorerPage
+from portfolio.Project import Project
+from portfolio.ProjectRegistry import ProjectRegistry
 
 LOAD_TIME = pd.Timestamp("2026-11-18 22:00", tz="UTC")
 
@@ -120,3 +124,29 @@ def data_source(tree, articles) -> FrameDataSource:
         "stale_after_days": 30,
     }
     return FrameDataSource(articles, make_topics(), tree, metadata, name="Test data")
+
+
+def make_project(data_source: FrameDataSource, slug: str = "news-topic-explorer") -> Project:
+    return Project(
+        slug=slug,
+        title="News Topic Explorer",
+        summary="A test summary.",
+        question="What is the news talking about?",
+        data="Hand made test articles.",
+        approach="A small topic tree.",
+        tags=("Testing",),
+        thumbnail="images/news-topic-explorer.png",
+        repo_url="https://github.com/ajgeiger",
+        repo_label="Code on GitHub",
+        build_page=lambda project: TopicExplorerPage(project, data_source, Settings()),
+    )
+
+
+@pytest.fixture
+def project(data_source) -> Project:
+    return make_project(data_source)
+
+
+@pytest.fixture
+def registry(project) -> ProjectRegistry:
+    return ProjectRegistry([project])
