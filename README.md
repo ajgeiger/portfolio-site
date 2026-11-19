@@ -2,7 +2,7 @@
 
 A personal portfolio website built in Plotly Dash. It covers my background and resume, and hosts analytics projects on real data that visitors can open and explore. The first project is the **News Topic Explorer**: 41,371 news articles grouped into 283 topics by Headline Radar, my own BERTopic style topic model, turned into a map you can walk from the whole corpus down to single headlines.
 
-**[Run it in three commands](#run-it)** &nbsp;\|&nbsp; [The website](#the-website) &nbsp;\|&nbsp; [Add a project](#add-a-project) &nbsp;\|&nbsp; [News Topic Explorer](#news-topic-explorer) &nbsp;\|&nbsp; [Data flow](#data-flow) &nbsp;\|&nbsp; [Sources](#sources)
+**[Run it in three commands](#run-it)** &nbsp;\|&nbsp; [The website](#the-website) &nbsp;\|&nbsp; [Ask page](#ask-page) &nbsp;\|&nbsp; [Add a project](#add-a-project) &nbsp;\|&nbsp; [News Topic Explorer](#news-topic-explorer) &nbsp;\|&nbsp; [Data flow](#data-flow) &nbsp;\|&nbsp; [Sources](#sources)
 
 ![Home page: hero, background, featured project, how I work, about and contact](docs/images/home.png)
 
@@ -13,9 +13,10 @@ A personal portfolio website built in Plotly Dash. It covers my background and r
 | `/` | Home | Short introduction, background (Lead Applied AI Scientist at Signature Aviation, the enterprise AI platform, Syracuse University), featured projects with numbers read from their data, how I work, about and contact links. |
 | `/projects` | Projects | One card per registered project: screenshot, summary, tags, headline numbers, a link to the live page and to the code. |
 | `/resume` | Resume | The full resume as a web document, section by section and word for word, with the PDF download. It prints cleanly. |
+| `/ask` | Ask | Questions about my projects and experience, answered from my resume and project READMEs, with numbered citations, source chips, suggested questions and a short note on the method. |
 | `/projects/news-topic-explorer` | News Topic Explorer | A short case study (question, data, approach, key findings) above the live explorer. |
 
-Every page shares a sticky header (Home, Projects, Resume, About, Contact), a footer with GitHub and Kaggle links, and a layout that adapts down to phone width. Numbers on the home and projects pages are computed from each project's data when the site starts, so they never drift from the app.
+Every page shares a sticky header (Home, Projects, Resume, Ask, About, Contact), a footer with GitHub and Kaggle links, and a layout that adapts down to phone width. Numbers on the home and projects pages are computed from each project's data when the site starts, so they never drift from the app.
 
 The resume PDF is served from `assets/files/Alexander_Geiger_Resume.pdf`. The home page hero, the About section and the resume page link to it with "Download resume (PDF)". The resume page text lives in `config/Resume.py` (built from `ResumeEmployer`, `ResumeRole` and `ResumeItem` entries) and matches the PDF. The phone number and personal email are only in the PDF.
 
@@ -24,6 +25,22 @@ The resume PDF is served from `assets/files/Alexander_Geiger_Resume.pdf`. The ho
 ![Projects index](docs/images/projects.png)
 
 ![Case study header on the project page](docs/images/project_page.png)
+
+## Ask page
+
+The Ask page is a thin front end for my separate [rag-chatbot](https://github.com/ajgeiger/rag-chatbot) service, which does the retrieval (hybrid BM25 and MiniLM search over chunked documents) and calls Claude or an OpenAI model. The page talks to it through the service's httpx only client, `rag_chatbot_client`, and posts each question to `POST /chat`.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `CHATBOT_API_URL` | `http://127.0.0.1:8070` | Where the service runs, locally or on a Hugging Face Space. |
+| `CHATBOT_API_KEY` | empty | Sent as `X-API-Key` when the service requires one. |
+| `CHATBOT_TIMEOUT` | `45` | Seconds to wait for an answer. A sleeping Space needs a moment to start. |
+
+When the service cannot be reached the page stays up: the answer says so plainly, the status card shows Offline, and it checks again every minute.
+
+![Ask page with two answers, citations and source chips](docs/images/ask-answers.png)
+
+![Ask page when the service is offline](docs/images/ask-outage.png)
 
 ## Add a project
 
@@ -144,6 +161,8 @@ python build_cache.py      # once, or after the topic model is refit
 python app.py              # then open http://127.0.0.1:8050
 ```
 
+For the Ask page, run the rag-chatbot service next to it (`make serve-fake` in that repository needs no key) or set `CHATBOT_API_URL` to a deployed one. During local work on both repositories, `pip install -e ../rag-chatbot` replaces the git dependency with your checkout.
+
 The `build` extras (`umap-learn`, `hdbscan`, `joblib`) are only needed by `build_cache.py`, because the model file pickles those objects. The app itself only reads the cache. Set `PORT` or `HOST` to change where it listens.
 
 Tests and style checks:
@@ -160,11 +179,11 @@ Tests use small hand made fixtures, never the real corpus.
 ```text
 app.py                  start the portfolio website
 build_cache.py          build the cache from Headline Radar outputs
-config/                 Settings, Profile, Resume and its entry classes, Theme, Formats
+config/                 Settings, Profile, Resume and its entry classes, AskCopy, Theme, Formats
 data/                   readers, CacheBuilder and data sources
 analytics/              tree building, navigation, trends, search, labels
-components/             site shell, project cards, resume link, case study header, explorer parts
-pages/                  AbstractPage, AbstractProjectPage, HomePage, ProjectsPage, ResumePage, TopicExplorerPage
+components/             site shell, project cards, resume link, case study header, explorer parts, Ask page parts
+pages/                  AbstractPage, AbstractProjectPage, HomePage, ProjectsPage, ResumePage, AskPage, TopicExplorerPage
 portfolio/              PortfolioApp, Project, ProjectRegistry
 assets/                 style.css, anchor_scroll.js, project thumbnails and the resume PDF
 tests/                  pytest suite with small fixtures
