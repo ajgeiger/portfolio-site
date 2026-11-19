@@ -12,12 +12,12 @@ A personal portfolio website built in Plotly Dash. It covers my background and r
 | --- | --- | --- |
 | `/` | Home | Short introduction, background (Lead Applied AI Scientist at Signature Aviation, the enterprise AI platform, Syracuse University), featured projects with numbers read from their data, how I work, about and contact links. |
 | `/projects` | Projects | One card per registered project: screenshot, summary, tags, headline numbers, a link to the live page and to the code. |
-| `/resume` | Resume | A plain summary of the resume (experience, education, certifications, skills) and the PDF download. |
+| `/resume` | Resume | The full resume as a web document, section by section and word for word, with the PDF download. It prints cleanly. |
 | `/projects/news-topic-explorer` | News Topic Explorer | A short case study (question, data, approach, key findings) above the live explorer. |
 
 Every page shares a sticky header (Home, Projects, Resume, About, Contact), a footer with GitHub and Kaggle links, and a layout that adapts down to phone width. Numbers on the home and projects pages are computed from each project's data when the site starts, so they never drift from the app.
 
-The resume PDF is served from `assets/files/Alexander_Geiger_Resume.pdf`. The home page hero, the About section and the resume page link to it with "Download resume (PDF)". The resume page text lives in `config/Resume.py` and follows the PDF.
+The resume PDF is served from `assets/files/Alexander_Geiger_Resume.pdf`. The home page hero, the About section and the resume page link to it with "Download resume (PDF)". The resume page text lives in `config/Resume.py` (built from `ResumeEmployer`, `ResumeRole` and `ResumeItem` entries) and matches the PDF. The phone number and personal email are only in the PDF.
 
 ![Resume page](docs/images/resume.png)
 
@@ -160,7 +160,7 @@ Tests use small hand made fixtures, never the real corpus.
 ```text
 app.py                  start the portfolio website
 build_cache.py          build the cache from Headline Radar outputs
-config/                 Settings, Profile, Resume, Position, Theme, Formats
+config/                 Settings, Profile, Resume and its entry classes, Theme, Formats
 data/                   readers, CacheBuilder and data sources
 analytics/              tree building, navigation, trends, search, labels
 components/             site shell, project cards, resume link, case study header, explorer parts

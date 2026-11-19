@@ -1,89 +1,118 @@
-"""The resume page: a plain summary of the resume with a link to the PDF."""
+"""The resume page: the full resume as a clean web document, with the PDF one click away."""
 
 from dash import Dash, html
 
 from components.ResumeLink import ResumeLink
-from config.Position import Position
-from config.Profile import Profile
 from config.Resume import Resume
+from config.ResumeEmployer import ResumeEmployer
+from config.ResumeItem import ResumeItem
+from config.ResumeRole import ResumeRole
 from pages.AbstractPage import AbstractPage
 
 
 class ResumePage(AbstractPage):
-    """Experience, education, certifications and skills, drawn only from the resume."""
+    """Every section and bullet of the resume, in the same order as the PDF.
+
+    The text comes from config/Resume.py. The phone number and personal email
+    are only in the downloadable PDF, never in the page text.
+    """
 
     path = "/resume"
     name = "Resume"
     title = "Resume"
-    description = "Resume of Alex Geiger, Lead Applied AI Scientist."
+    description = "Resume of Alexander J. Geiger, Lead Applied AI Scientist."
 
     def layout(self):
-        heading = html.Div(
-            [
-                html.Div("RESUME", className="eyebrow"),
-                html.H1(Profile.NAME, className="page-title"),
-                html.P(f"{Profile.ROLE}, {Profile.EMPLOYER}", className="resume-role"),
-                html.P(Resume.SUMMARY, className="section-lead"),
-                html.Div(ResumeLink().build("button primary"), className="project-actions"),
-            ],
-            className="page-heading",
-        )
-        experience = self.section(
-            "Experience",
-            [self.position(position) for position in Resume.EXPERIENCE]
-            + [html.H3("Earlier experience", className="resume-subheading")]
-            + [self.position(position) for position in Resume.EARLIER_EXPERIENCE],
-        )
-        education = self.section(
-            "Education", [self.entry(school, degree, years) for school, degree, years in Resume.EDUCATION]
-        )
-        certifications = self.section(
-            "Certifications", [self.entry(name, "", issued) for name, issued in Resume.CERTIFICATIONS]
-        )
-        achievements = self.section(
-            "Competitions", [self.entry(name, detail, when) for name, when, detail in Resume.ACHIEVEMENTS]
-        )
-        skills = self.section(
-            "Skills",
-            [
-                html.Div([html.Span(label, className="resume-skill-label"), html.Span(items)], className="resume-skill")
-                for label, items in Resume.SKILLS
-            ],
-        )
-        side = html.Div([education, certifications, achievements, skills], className="resume-side")
-        body = html.Div([experience, side], className="resume-grid")
-        return html.Div(
-            html.Section(html.Div([heading, body], className="section-inner"), className="section"),
-            className="site-page",
-        )
-
-    @staticmethod
-    def section(title: str, children: list) -> html.Div:
-        return html.Div([html.H2(title, className="section-title small"), *children], className="resume-section")
-
-    @staticmethod
-    def position(position: Position) -> html.Div:
-        header = html.Div(
+        toolbar = html.Div(
             [
                 html.Div(
-                    [
-                        html.H3(position.title, className="resume-title"),
-                        html.Div(f"{position.organization}, {position.location}", className="resume-meta"),
-                    ]
+                    [html.Div("RESUME", className="eyebrow"), html.P("Web version of the PDF.", className="muted")]
                 ),
-                html.Div(position.dates, className="resume-dates"),
+                ResumeLink().build("button primary large"),
             ],
-            className="resume-entry-header",
+            className="resume-toolbar",
         )
-        highlights = [html.Ul([html.Li(item) for item in position.highlights])] if position.highlights else []
-        return html.Div([header, *highlights], className="resume-entry")
+        document = html.Article(
+            [
+                self.header(),
+                self.section(Resume.SUMMARY_TITLE, [html.P(Resume.SUMMARY, className="resume-summary")]),
+                self.section(Resume.SKILLS_TITLE, [self.skills()]),
+                self.section(Resume.EXPERIENCE_TITLE, [self.employer(employer) for employer in Resume.EXPERIENCE]),
+                self.section(Resume.EDUCATION_TITLE, [self.item(item) for item in Resume.EDUCATION]),
+                self.section(Resume.CERTIFICATIONS_TITLE, [self.item(item) for item in Resume.CERTIFICATIONS]),
+                self.section(Resume.ACHIEVEMENTS_TITLE, [self.item(item) for item in Resume.ACHIEVEMENTS]),
+                html.Div(ResumeLink().build("button primary"), className="resume-doc-footer"),
+            ],
+            className="resume-doc",
+        )
+        return html.Div(html.Div([toolbar, document], className="resume-page"), className="site-page")
+
+    # Building blocks
 
     @staticmethod
-    def entry(title: str, detail: str, when: str) -> html.Div:
-        lines = [html.H3(title, className="resume-title"), html.Div(when, className="resume-dates")]
-        if detail:
-            lines.insert(1, html.Div(detail, className="resume-meta"))
-        return html.Div(lines, className="resume-entry compact")
+    def header() -> html.Header:
+        links = []
+        for index, (label, url) in enumerate(Resume.LINKS):
+            if index:
+                links.append(html.Span("\u2022", className="resume-dot"))
+            links.append(html.A(label, href=url, target="_blank", rel="noopener noreferrer"))
+        return html.Header(
+            [
+                html.H1(Resume.NAME, className="resume-name"),
+                html.Div(Resume.HEADLINE, className="resume-headline"),
+                html.Div(Resume.LOCATION, className="resume-location"),
+                html.Div(links, className="resume-links"),
+            ],
+            className="resume-header",
+        )
+
+    @staticmethod
+    def section(title: str, children: list) -> html.Section:
+        return html.Section([html.H2(title, className="resume-section-title"), *children], className="resume-block")
+
+    @staticmethod
+    def skills() -> html.Dl:
+        rows = []
+        for label, value in Resume.SKILLS:
+            rows += [html.Dt(label), html.Dd(value)]
+        return html.Dl(rows, className="resume-skills")
+
+    @staticmethod
+    def row(left, right: str, class_name: str) -> html.Div:
+        """A line with text on the left and dates aligned to the right."""
+        return html.Div(
+            [html.Div(left, className="resume-row-left"), html.Div(right, className="resume-row-dates")],
+            className=f"resume-row {class_name}",
+        )
+
+    @staticmethod
+    def bullets(items: tuple[str, ...]) -> list:
+        return [html.Ul([html.Li(item) for item in items], className="resume-bullets")] if items else []
+
+    def employer(self, employer: ResumeEmployer) -> html.Div:
+        name = [html.Span(employer.name, className="resume-employer-name")]
+        if employer.location:
+            name += [
+                html.Span("|", className="resume-separator"),
+                html.Span(employer.location, className="resume-place"),
+            ]
+        return html.Div(
+            [self.row(name, employer.dates, "employer"), *[self.role(role) for role in employer.roles]],
+            className="resume-employer",
+        )
+
+    def role(self, role: ResumeRole) -> html.Div:
+        note = [html.P(role.note, className="resume-note")] if role.note else []
+        return html.Div(
+            [self.row(role.heading, role.dates, "role"), *note, *self.bullets(role.bullets)],
+            className="resume-role-block",
+        )
+
+    def item(self, item: ResumeItem) -> html.Div:
+        heading = [html.Span(item.title, className="resume-item-title")]
+        if item.detail:
+            heading += [html.Span("|", className="resume-separator"), html.Span(item.detail)]
+        return html.Div([self.row(heading, item.dates, "item"), *self.bullets(item.bullets)], className="resume-item")
 
     def register_callbacks(self, app: Dash) -> None:
         """The resume page is static, so it has no callbacks."""

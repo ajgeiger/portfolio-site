@@ -6,6 +6,7 @@ import pytest
 
 from components.AppShell import AppShell
 from config.Profile import Profile
+from config.Resume import Resume
 from pages.HomePage import HomePage
 from pages.ProjectsPage import ProjectsPage
 from pages.ResumePage import ResumePage
@@ -131,3 +132,18 @@ def test_copy_has_no_phone_email_or_long_dashes(site_text):
     assert PHONE.search(site_text) is None
     assert "@" not in site_text
     assert "\u2013" not in site_text and "\u2014" not in site_text
+
+
+def test_resume_page_shows_the_full_resume_in_order():
+    text = text_of(ResumePage().layout())
+    expected = [Resume.NAME, Resume.SUMMARY]
+    for employer in Resume.EXPERIENCE:
+        expected.append(employer.name)
+        for role in employer.roles:
+            expected += [role.title, role.dates, *([role.note] if role.note else []), *role.bullets]
+    for item in Resume.EDUCATION + Resume.CERTIFICATIONS + Resume.ACHIEVEMENTS:
+        expected += [item.title, item.dates, *item.bullets]
+    position = 0
+    for piece in expected:
+        position = text.find(piece, position)
+        assert position >= 0, piece
