@@ -1,8 +1,8 @@
 # Alex Geiger, Lead Applied AI Scientist: Portfolio Site
 
-A personal portfolio website built in Plotly Dash. It covers my background and resume, and hosts analytics projects on real data that visitors can open and explore. The first project is the **News Topic Explorer**: 41,371 news articles grouped into 283 topics by Headline Radar, my own BERTopic style topic model, turned into a map you can walk from the whole corpus down to single headlines.
+A personal portfolio website built in Plotly Dash. It covers my background and resume, and hosts analytics projects on real data that visitors can open and explore. The first project is the **News Topic Explorer**: 41,371 news articles grouped into 283 topics by Headline Radar, my own BERTopic style topic model, turned into a map you can walk from the whole corpus down to single headlines. The second is the **Natural Gas Price Forecast**: rolling backtests of four models on public futures, weather and storage data, and the champion and challenger that now forecast every trading morning.
 
-**[Run it in three commands](#run-it)** &nbsp;\|&nbsp; [The website](#the-website) &nbsp;\|&nbsp; [Ask page](#ask-page) &nbsp;\|&nbsp; [Add a project](#add-a-project) &nbsp;\|&nbsp; [News Topic Explorer](#news-topic-explorer) &nbsp;\|&nbsp; [Data flow](#data-flow) &nbsp;\|&nbsp; [Sources](#sources)
+**[Run it in three commands](#run-it)** &nbsp;\|&nbsp; [The website](#the-website) &nbsp;\|&nbsp; [Ask page](#ask-page) &nbsp;\|&nbsp; [Add a project](#add-a-project) &nbsp;\|&nbsp; [News Topic Explorer](#news-topic-explorer) &nbsp;\|&nbsp; [Natural Gas Price Forecast](#natural-gas-price-forecast) &nbsp;\|&nbsp; [Data flow](#data-flow) &nbsp;\|&nbsp; [Sources](#sources)
 
 ![Home page: hero, background, featured project, how I work, about and contact](docs/images/home.png)
 
@@ -15,6 +15,7 @@ A personal portfolio website built in Plotly Dash. It covers my background and r
 | `/resume` | Resume | The full resume as a web document, section by section and word for word, with the PDF download. It prints cleanly. |
 | `/ask` | Ask | Questions about my projects and experience, answered from my resume and project READMEs, with numbered citations, source chips, suggested questions and a short note on the method. |
 | `/projects/news-topic-explorer` | News Topic Explorer | A short case study (question, data, approach, key findings) above the live explorer. |
+| `/projects/natural-gas-price-forecast` | Natural Gas Price Forecast | A case study, then six numbered sections: summary, backtest demo, model leaderboard, staged predictions, live forecast against actuals, and how it runs. |
 
 Every page shares a sticky header (Home, Projects, Resume, Ask, About, Contact), a footer with GitHub and Kaggle links, and a layout that adapts down to phone width. Numbers on the home and projects pages are computed from each project's data when the site starts, so they never drift from the app.
 
@@ -113,6 +114,65 @@ The side panel lists headlines for the current view. A rounded search field filt
 | Largest topic | Topic 0, Man and Police (crime and arrests), 1,089 articles |
 | Fastest riser | Topic 2, Gen Z set to surpass baby boomers in management roles, +1.8 points of share in the last 6 hours |
 
+## Natural Gas Price Forecast
+
+**Can a model forecast natural gas futures better than repeating the last price?**
+
+The page presents my [natural-gas-forecasting](https://github.com/ajgeiger/natural-gas-forecasting) project the way a consulting team would present a forecast review: the answer first, then the evidence, then what runs in production and where it falls short. The forecast target is the daily high of the front-month natural gas futures contract (Yahoo Finance `NG=F`), in dollars per MMBtu. Weather in major gas-demand cities and EIA weekly storage are the inputs. All of it is public data.
+
+![Case study header](docs/images/natgas-header.png)
+
+| Section | What it shows |
+| --- | --- |
+| 01 Summary | Champion MAE against naive, MAPE, 80% band coverage, the number of backtest dates and the latest live run. |
+| 02 Backtest demo | A slider over all 125 as-of dates. Price history up to the date, the Chronos-2 forecast with its 10th to 90th percentile band, a second model of your choice and the actuals, with each model's MAE for that date. |
+| 03 Model leaderboard | MAE, RMSE, MAPE, WAPE and bias for every model, overall and by horizon bucket (days 1 to 5, 6 to 15, 16 to 30), and MAE at each day ahead. |
+| 04 Staged predictions | The newest live run: the production path (Chronos-2, registry version 8, with its band) against the staging path (gradient boosting, version 9), with a run selector. |
+| 05 Live forecast against actuals | Matured live forecasts against the settled price and the rolling accuracy over the last 20 as-of dates. Until the first target date settles it shows a pending state with the date the first actual is due. |
+| 06 How it runs | Data refresh, scoring, actuals backfill, monitoring and this dashboard, plus method notes and caveats. |
+
+![Summary cards](docs/images/natgas-summary.png)
+
+![Backtest demo](docs/images/natgas-backtest.png)
+
+![Model leaderboard](docs/images/natgas-leaderboard.png)
+
+![Staged predictions](docs/images/natgas-staged.png)
+
+![Live forecast against actuals, pending](docs/images/natgas-live.png)
+
+![How it runs, method notes and caveats](docs/images/natgas-pipeline.png)
+
+### Numbers on the page
+
+Every number is computed from the snapshot when the site starts and matches the tables in the forecasting repository.
+
+| Model | MAE | RMSE | MAPE | WAPE | Bias | MAE vs naive |
+| --- | --- | --- | --- | --- | --- | --- |
+| Chronos-2 (champion) | 0.5192 | 0.7975 | 13.12% | 13.65% | -0.0420 | 1.28% better |
+| Gradient boosting (challenger) | 0.5212 | 0.8028 | 13.41% | 13.70% | +0.0077 | 0.90% better |
+| Naive | 0.5259 | 0.8107 | 13.50% | 13.82% | +0.0037 | baseline |
+| Greykite | 0.7362 | 1.0741 | 19.36% | 19.35% | +0.0030 | 39.98% worse |
+
+Actuals fell inside the Chronos-2 80% band 72.9% of the time over the 124 as-of dates that have a band (Oct 2, 2026 has none). The first live run is as of Nov 18, 2026, with a production day 1 forecast of 3.474 (band 3.302 to 3.641).
+
+### The snapshot
+
+The hosted site cannot read the forecasting database, so `build_forecast_cache.py` copies what the page needs into `cache/natgas/` (about 300 KB, committed to the repository):
+
+```bash
+python build_forecast_cache.py    # reads ../natural-gas-forecasting, or NATGAS_FORECASTING_PATH
+```
+
+`ForecastSnapshotBuilder` opens `data/natgas.db` read only (`mode=ro`) and reads `outputs/backtest_forecasts.parquet`, checking its row count against the database table. It writes the backtest forecasts, settled prices, every live prediction, matured actuals and the two accuracy views as parquet, plus `metadata.json`. A price bar loaded on its own trading day is left for the next refresh, since that session may still be trading. Run it again after each scoring run to pick up new predictions and actuals. Without the source folder it says so and leaves the current snapshot alone, and without a snapshot the page still renders with a short note. Nothing is scored or refit here.
+
+### Caveats shown on the page
+
+* The champion's edge over naive is modest: 1.28% lower MAE. Naive is slightly better over days 1 to 5; Chronos-2 leads on days 16 to 30.
+* The 80% band holds 72.9% of actuals, so it runs narrow.
+* Backtests used observed weather for all 30 days. Live runs use the Open-Meteo weather forecast for days 1 to 10 and 10 year average degree days by day of year, smoothed over 15 days, for days 11 to 30.
+* The target is the front-month daily high price, not demand.
+
 ## Code highlights
 
 * **Read only by design.** The app never fits or retrains anything. `CacheBuilder` reads the pipeline's CSV outputs, the pickled model attributes and the SQLite database (opened with `mode=ro`), joins them on article id with `validate="many_to_one"` and writes small parquet tables. The app starts in about two seconds from that cache.
@@ -164,6 +224,7 @@ Python 3.11 or newer. Headline Radar's fitted outputs must sit in a sibling fold
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[build,dev]"
 python build_cache.py      # once, or after the topic model is refit
+python build_forecast_cache.py   # refresh the natural gas forecast snapshot (optional, a copy is committed)
 python app.py              # then open http://127.0.0.1:8050
 ```
 
@@ -185,11 +246,12 @@ Tests use small hand made fixtures, never the real corpus.
 ```text
 app.py                  start the portfolio website
 build_cache.py          build the cache from Headline Radar outputs
-config/                 Settings, Profile, Resume and its entry classes, AskCopy, Theme, Formats
-data/                   readers, CacheBuilder and data sources
-analytics/              tree building, navigation, trends, search, labels
-components/             site shell, project cards, resume link, case study header, explorer parts, Ask page parts
-pages/                  AbstractPage, AbstractProjectPage, HomePage, ProjectsPage, ResumePage, AskPage, TopicExplorerPage
+build_forecast_cache.py snapshot the natural gas forecast outputs into cache/natgas
+config/                 Settings, Profile, Resume and its entry classes, AskCopy, Theme, Formats, ForecastModels
+data/                   readers, CacheBuilder and data sources; data/forecast/ ForecastSnapshotBuilder and ForecastCache
+analytics/              tree building, navigation, trends, search, labels; analytics/forecast/ accuracy, backtest windows, runs
+components/             site shell, project cards, resume link, case study header, explorer parts, Ask page parts; components/forecast/ charts, tables and blocks for the forecast page
+pages/                  AbstractPage, AbstractProjectPage, HomePage, ProjectsPage, ResumePage, AskPage, TopicExplorerPage, PriceForecastPage
 portfolio/              PortfolioApp, Project, ProjectRegistry
 assets/                 style.css, anchor_scroll.js, project thumbnails and the resume PDF
 tests/                  pytest suite with small fixtures

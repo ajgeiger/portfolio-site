@@ -9,7 +9,12 @@ class CaseStudyHeader:
     """The question as the lead, then the data, the approach and key findings in plain words."""
 
     def build(
-        self, project: Project, highlights: list[tuple[str, str]], findings: list[str], live_anchor: str
+        self,
+        project: Project,
+        highlights: list[tuple[str, str]],
+        findings: list[str],
+        live_anchor: str,
+        live_label: str = "Jump to the live explorer",
     ) -> html.Section:
         crumbs = html.Nav(
             [
@@ -29,7 +34,7 @@ class CaseStudyHeader:
                 html.Div([html.Span(tag, className="tag-pill") for tag in project.tags], className="tag-row"),
                 html.Div(
                     [
-                        html.A("Jump to the live explorer \u2193", href=f"#{live_anchor}", className="button primary"),
+                        html.A(f"{live_label} \u2193", href=f"#{live_anchor}", className="button primary"),
                         html.A(
                             project.repo_label,
                             href=project.repo_url,

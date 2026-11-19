@@ -7,4 +7,7 @@ __pycache__/
 .ruff_cache/
 
 # Precomputed tables built from headline-radar outputs
-cache/
+cache/*
+
+# The natural gas forecast snapshot is small and committed, so a hosted copy can read it
+!cache/natgas/

@@ -109,7 +109,7 @@ class HomePage(AbstractPage):
         heading = html.Div(
             [
                 html.Div("FEATURED WORK", className="eyebrow"),
-                html.H2("Featured project", className="section-title"),
+                html.H2("Featured projects" if len(cards) > 1 else "Featured project", className="section-title"),
                 html.P(
                     "Each project is a working app on real data, with a short case study and method notes. "
                     "The numbers below are read from the data when the site starts.",

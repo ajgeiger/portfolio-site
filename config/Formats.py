@@ -22,6 +22,20 @@ class Formats:
         return f"{share * 100:.{digits}f}%"
 
     @staticmethod
+    def decimal(value: float, digits: int = 4) -> str:
+        """A plain number with fixed decimals, such as an error in dollars per MMBtu."""
+        if value is None or pd.isna(value):
+            return "n/a"
+        return f"{value:.{digits}f}"
+
+    @staticmethod
+    def signed(value: float, digits: int = 4) -> str:
+        """A number with its sign, such as a bias."""
+        if value is None or pd.isna(value):
+            return "n/a"
+        return f"{'+' if value >= 0 else '-'}{abs(value):.{digits}f}"
+
+    @staticmethod
     def points(change: float) -> str:
         sign = "+" if change >= 0 else "-"
         return f"{sign}{abs(change):.1f} pts"
