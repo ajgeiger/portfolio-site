@@ -47,12 +47,6 @@ def test_leaderboard_has_every_bucket_and_an_all_days_row():
     assert board[board["horizon_bucket"] == "all days"].set_index("model")["bias"]["naive"] == pytest.approx(0.30)
 
 
-def test_error_by_horizon_day_has_one_row_per_model_and_day():
-    by_day = ForecastAccuracy.by_horizon_day(typed(make_backtest()))
-    assert len(by_day) == 4 * 6
-    assert set(by_day[by_day["model"] == "greykite"]["mae"].round(6)) == {0.5}
-
-
 def test_coverage_counts_only_rows_with_a_band():
     backtest = typed(make_backtest())
     coverage = ForecastAccuracy.coverage(backtest[backtest["model"] == "chronos"])

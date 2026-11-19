@@ -8,7 +8,6 @@ from analytics.forecast.BacktestWindow import BacktestWindow
 from analytics.forecast.ForecastAccuracy import ForecastAccuracy
 from components.forecast.BacktestFanChart import BacktestFanChart
 from components.forecast.ForecastIds import ForecastIds
-from components.forecast.HorizonErrorChart import HorizonErrorChart
 from components.forecast.LeaderboardTable import LeaderboardTable
 from components.forecast.RunDetails import RunDetails
 from components.forecast.RunList import RunList
@@ -77,9 +76,11 @@ def test_fan_chart_leaves_out_the_band_where_there_is_none(cache_factory):
     assert next(trace for trace in figure.data if trace.name == "Naive").line.dash == "dot"
 
 
-def test_horizon_chart_has_one_line_per_model_in_display_order(cache_factory):
-    by_day = ForecastAccuracy.by_horizon_day(cache_factory().backtest())
-    assert trace_names(HorizonErrorChart().build(by_day)) == ["Chronos-2", "Gradient boosting", "Naive", "Greykite"]
+def test_leaderboard_switches_to_a_horizon_bucket(cache_factory):
+    board = ForecastAccuracy.leaderboard(cache_factory().backtest())
+    text = text_of(LeaderboardTable().build(board, "days 1 to 5"))
+    assert "0.1000" in text and "0.5000" in text
+    assert "No backtest data" in text_of(LeaderboardTable().build(board, "days 16 to 30"))
 
 
 def test_staged_chart_shows_both_stages_with_versions(cache_factory):
@@ -95,7 +96,8 @@ def test_staged_chart_shows_both_stages_with_versions(cache_factory):
 def test_charts_fall_back_to_a_note_when_empty(cache_factory):
     cache = cache_factory()
     assert StagedForecastChart().build(cache.prices(), cache.predictions().iloc[0:0]).layout.annotations
-    assert HorizonErrorChart().build(ForecastAccuracy.by_horizon_day(cache.backtest().iloc[0:0])).layout.annotations
+    window = BacktestWindow(cache.backtest().iloc[0:0], cache.prices().iloc[0:0])
+    assert BacktestFanChart().build(window, pd.Timestamp(AS_OF_DATES[0]), ["chronos"]).layout.annotations
 
 
 def test_run_list_has_one_clickable_row_per_run_with_day_one_values(cache_factory):
@@ -147,7 +149,15 @@ def test_page_order_and_copy(cache_factory):
     positions = [text.index(title) for title in titles]
     assert positions == sorted(positions)
     assert "View production forecast" in text
-    for removed in ("Summary", "Error by model", "Staged predictions", "How it runs", "Caveats", "pending"):
+    for removed in (
+        "Summary",
+        "Error by model",
+        "Error by day ahead",
+        "Staged predictions",
+        "How it runs",
+        "Caveats",
+        "pending",
+    ):
         assert removed not in text
     assert not re.search("demo", text, re.IGNORECASE)
     assert "deck-number" not in str(page.layout())
