@@ -1,8 +1,9 @@
 """Back, Home, breadcrumbs, search and graph controls above the graph."""
 
-from dash import dcc, html
+from dash import html
 
 from components.ExplorerIds import ExplorerIds
+from components.SearchBox import SearchBox
 
 
 class NavigationBar:
@@ -21,12 +22,9 @@ class NavigationBar:
                 ),
                 html.Div(
                     [
-                        dcc.Dropdown(
-                            id=ExplorerIds.SEARCH,
-                            options=[],
-                            placeholder="Search by keyword, label or topic id",
-                            className="search",
-                            clearable=True,
+                        SearchBox().build(
+                            ExplorerIds.SEARCH,
+                            "Search by keyword, label or topic id",
                         ),
                         html.Button("+", id=ExplorerIds.ZOOM_IN, className="icon-button", n_clicks=0, title="Zoom in"),
                         html.Button(

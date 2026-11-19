@@ -2,6 +2,7 @@
 
 import dash_cytoscape as cytoscape
 
+from components.BezierPath import BezierPath
 from components.CardSvg import CardSvg
 from config.Theme import Theme
 
@@ -10,9 +11,9 @@ class TopicGraph:
     """Build the graph component and its elements.
 
     The hub sits in the middle. Branches alternate between a left and a right
-    column, largest first, and connect to the hub with curved lines. The
-    positions and curves are for reading only. They do not encode similarity
-    or importance.
+    column, largest first, and connect to the hub with horizontal S curves.
+    The positions and curves are for reading only. They do not encode
+    similarity or importance.
     """
 
     COLUMN_GAP = 330
@@ -29,6 +30,7 @@ class TopicGraph:
                 "background-fit": "contain",
                 "background-opacity": 0,
                 "border-width": 0,
+                "corner-radius": 10,
                 "label": "",
             },
         },
@@ -39,7 +41,10 @@ class TopicGraph:
             "style": {
                 "curve-style": "unbundled-bezier",
                 "control-point-distances": "data(bend)",
-                "control-point-weights": 0.5,
+                "control-point-weights": "data(weights)",
+                "source-endpoint": "data(source_endpoint)",
+                "target-endpoint": "data(target_endpoint)",
+                "edge-distances": "endpoints",
                 "line-color": "#B8C2D3",
                 "width": 1.6,
                 "opacity": 0.9,
@@ -93,8 +98,34 @@ class TopicGraph:
                         "position": {"x": x, "y": y},
                     }
                 )
-                bend = round(-side * y * 0.22, 1)
-                elements.append(
-                    {"data": {"id": f"edge::{branch['key']}", "source": hub["key"], "target": node_id, "bend": bend}}
-                )
+                elements.append(self.edge(hub["key"], node_id, branch["key"], side, size, x, y, branch["width"]))
         return elements
+
+    @staticmethod
+    def edge(
+        hub_key: str,
+        node_id: str,
+        branch_key: str,
+        side: int,
+        hub_size: float,
+        x: float,
+        y: float,
+        width: float,
+    ) -> dict:
+        """An S-shaped link from the side of the hub to the inner side of a card."""
+        source_endpoint = "50% 0%" if side == 1 else "-50% 0%"
+        target_endpoint = "-50% 0%" if side == 1 else "50% 0%"
+        curve = BezierPath.horizontal(side * hub_size / 2, 0.0, x - side * width / 2, y)
+        weights, distances = curve.cytoscape_controls()
+        return {
+            "data": {
+                "id": f"edge::{branch_key}",
+                "source": hub_key,
+                "target": node_id,
+                "path": curve.svg,
+                "weights": weights,
+                "bend": distances,
+                "source_endpoint": source_endpoint,
+                "target_endpoint": target_endpoint,
+            }
+        }

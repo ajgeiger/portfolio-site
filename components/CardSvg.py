@@ -18,6 +18,10 @@ class CardSvg:
     BRANCH_SIZE = (290, 108)
     HEADLINE_SIZE = (340, 116)
     HUB_SIZE = 210
+    RADIUS = 10
+    ACCENT_X = 8
+    ACCENT_WIDTH = 5
+    BAR_HEIGHT = 6
 
     FONT = "Inter, Segoe UI, Helvetica Neue, Arial, sans-serif"
 
@@ -50,12 +54,45 @@ class CardSvg:
             f'fill="{color}" text-anchor="{anchor}" letter-spacing="{spacing}">{html.escape(content)}</text>'
         )
 
-    @staticmethod
-    def frame(width: int, height: int, border: str, border_width: int) -> str:
-        """The white rounded card body with a thin border."""
+    @classmethod
+    def clip(cls, width: int, height: int) -> str:
+        """Keep fills inside the rounded card so accents cannot stick out."""
         return (
-            f'<rect x="1" y="1" width="{width - 2}" height="{height - 2}" rx="10" fill="#FFFFFF" '
-            f'stroke="{border}" stroke-width="{border_width}"/>'
+            f'<defs><clipPath id="card">'
+            f'<rect x="1" y="1" width="{width - 2}" height="{height - 2}" rx="{cls.RADIUS}"/>'
+            f"</clipPath></defs>"
+        )
+
+    @classmethod
+    def frame(cls, width: int, height: int, border: str, border_width: int) -> str:
+        """The white rounded card body. The stroke is drawn later, on top."""
+        return (
+            f'<rect x="1" y="1" width="{width - 2}" height="{height - 2}" rx="{cls.RADIUS}" '
+            f'fill="#FFFFFF"/>'
+            f'<rect x="1" y="1" width="{width - 2}" height="{height - 2}" rx="{cls.RADIUS}" '
+            f'fill="none" stroke="{border}" stroke-width="{border_width}"/>'
+        )
+
+    @classmethod
+    def accent(cls, height: int, color: str) -> str:
+        """An inset vertical pill, clipped to the card, with rounded ends."""
+        top = 12
+        bar_height = max(height - 24, 8)
+        radius = cls.ACCENT_WIDTH / 2
+        return (
+            f'<g clip-path="url(#card)">'
+            f'<rect x="{cls.ACCENT_X}" y="{top}" width="{cls.ACCENT_WIDTH}" height="{bar_height}" '
+            f'rx="{radius}" fill="{color}"/>'
+            f"</g>"
+        )
+
+    @classmethod
+    def bar(cls, x: float, y: float, width: float, color: str) -> str:
+        """A horizontal share bar with fully rounded ends."""
+        radius = cls.BAR_HEIGHT / 2
+        return (
+            f'<rect x="{x}" y="{y}" width="{width:.1f}" height="{cls.BAR_HEIGHT}" '
+            f'rx="{radius}" fill="{color}"/>'
         )
 
     @staticmethod
@@ -82,13 +119,14 @@ class CardSvg:
         kicker_text = kicker + ("  \u00b7  RENAMED" if renamed else "")
         parts = [
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}">',
+            cls.clip(width, height),
             cls.frame(width, height, Theme.LINE, 1),
-            f'<rect x="1" y="1" width="6" height="{height - 2}" rx="3" fill="{stripe}"/>',
+            cls.accent(height, stripe),
             cls.text(22, 26, kicker_text, 10, Theme.MUTED, 600, spacing=1.2),
             cls.text(22, 50, cls.shorten(name, 27), 16, Theme.NAVY, 700),
             cls.text(22, 72, detail, 12, Theme.INK),
-            f'<rect x="22" y="86" width="{bar_width}" height="6" rx="3" fill="{Theme.GRAY_SOFT}"/>',
-            f'<rect x="22" y="86" width="{filled:.1f}" height="6" rx="3" fill="{stripe}"/>',
+            cls.bar(22, 86, bar_width, Theme.GRAY_SOFT),
+            cls.bar(22, 86, filled, stripe),
             "</svg>",
         ]
         return cls.data_uri("".join(parts))
@@ -102,8 +140,9 @@ class CardSvg:
         lines = cls.wrap(title, 44, 3)
         parts = [
             f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}">',
+            cls.clip(width, height),
             cls.frame(width, height, border, 2 if selected else 1),
-            f'<rect x="1" y="1" width="6" height="{height - 2}" rx="3" fill="{stripe}"/>',
+            cls.accent(height, stripe),
             cls.text(20, 22, tag.upper(), 10, stripe, 700, spacing=1.2),
         ]
         parts += [cls.text(20, 42 + 17 * index, line, 13, Theme.NAVY, 600) for index, line in enumerate(lines)]

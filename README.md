@@ -57,6 +57,8 @@ The project then appears on the home page, on `/projects` and at `/projects/<slu
 
 ![Live explorer: every article in the hub, the six largest themes around it](docs/images/landing.png)
 
+![Topic graph with S-shaped links and rounded cards](docs/images/topic-tree-curves.png)
+
 ### Why it matters
 
 Newsrooms, comms teams and analysts all face the same problem: thousands of headlines a day and no time to read them. A topic model can sort them, but a table of 283 keyword lists is not an answer anyone can act on. This explorer presents the model the way a consultant would present a topic analysis:
@@ -72,7 +74,7 @@ Newsrooms, comms teams and analysts all face the same problem: thousands of head
 | --- | --- |
 | Summary cards | Articles in view, how many landed in a topic, how many are unassigned, how many have no text. Each card opens that group. |
 | Topic graph | A hub for the current group and cards for its branches, each with a share bar. Click to drill down. Zoom, fit and drag are built in. |
-| Side panel | Type, count, share of all articles and of the group you came from, the keywords behind the label, the largest topics and example headlines tagged Representative or Sampled. |
+| Side panel | Type, count, share of all articles and of the group you came from, the keywords behind the label, the largest topics and a searchable list of headlines tagged Representative or Sampled. |
 | Coverage over time | Hourly, daily or weekly article counts for whatever is selected. |
 | Source mix | Which outlets drive the selection. |
 | Rising and fading topics | Change in share of coverage, recent window against the window before it. Click a bar to open the topic. |
@@ -85,6 +87,10 @@ Newsrooms, comms teams and analysts all face the same problem: thousands of head
 **A single topic.** The cards become example headlines. Clicking one shows the full title, summary, source, date and a link.
 
 ![Single topic with the selected headline](docs/images/topic_headlines.png)
+
+The side panel lists headlines for the current view. A rounded search field filters that list.
+
+![Article search in the side panel](docs/images/article-search.png)
 
 **Trend, source mix and rising topics** for the selection.
 
