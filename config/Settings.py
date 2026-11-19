@@ -15,6 +15,8 @@ class Settings:
     looks for a sibling folder named headline-radar next to this repository.
     CHATBOT_API_URL is the rag-chatbot service behind the Ask page, and
     CHATBOT_API_KEY its optional key. The key only ever comes from the environment.
+    NATGAS_FORECASTING_PATH points at a natural-gas-forecasting checkout, read
+    only by build_forecast_cache.py. NATGAS_CACHE is where its snapshot lives.
     """
 
     headline_radar_folder: Path = field(
@@ -22,6 +24,14 @@ class Settings:
     )
     cache_folder: Path = field(
         default_factory=lambda: Path(os.environ.get("TOPIC_EXPLORER_CACHE", REPOSITORY_FOLDER / "cache"))
+    )
+    natgas_source_folder: Path = field(
+        default_factory=lambda: Path(
+            os.environ.get("NATGAS_FORECASTING_PATH", REPOSITORY_FOLDER.parent / "natural-gas-forecasting")
+        )
+    )
+    natgas_cache_folder: Path = field(
+        default_factory=lambda: Path(os.environ.get("NATGAS_CACHE", REPOSITORY_FOLDER / "cache" / "natgas"))
     )
     host: str = field(default_factory=lambda: os.environ.get("HOST", "127.0.0.1"))
     port: int = field(default_factory=lambda: int(os.environ.get("PORT", "8050")))
@@ -51,3 +61,11 @@ class Settings:
     @property
     def database_path(self) -> Path:
         return self.headline_radar_folder / "data" / "headline_radar.db"
+
+    @property
+    def natgas_database_path(self) -> Path:
+        return self.natgas_source_folder / "data" / "natgas.db"
+
+    @property
+    def natgas_backtest_path(self) -> Path:
+        return self.natgas_source_folder / "outputs" / "backtest_forecasts.parquet"
