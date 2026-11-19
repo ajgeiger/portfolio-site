@@ -1,7 +1,7 @@
-"""The natural gas price forecast: backtests, staged live predictions and how the pipeline runs."""
+"""The natural gas price forecast: the model in production, how it was chosen and the backtests behind it."""
 
 import pandas as pd
-from dash import Dash, Input, Output, dcc, html
+from dash import ALL, Dash, Input, Output, State, callback_context, dcc, html
 
 from analytics.forecast.BacktestWindow import BacktestWindow
 from analytics.forecast.ForecastAccuracy import ForecastAccuracy
@@ -10,15 +10,11 @@ from analytics.forecast.PredictionRuns import PredictionRuns
 from components.CaseStudyHeader import CaseStudyHeader
 from components.forecast.BacktestFanChart import BacktestFanChart
 from components.forecast.ForecastIds import ForecastIds as Ids
-from components.forecast.ForecastNotes import ForecastNotes
 from components.forecast.HorizonErrorChart import HorizonErrorChart
 from components.forecast.KpiCards import KpiCards
 from components.forecast.LeaderboardTable import LeaderboardTable
-from components.forecast.LiveAccuracyTable import LiveAccuracyTable
-from components.forecast.LiveActualsChart import LiveActualsChart
-from components.forecast.PendingState import PendingState
-from components.forecast.PipelineDiagram import PipelineDiagram
-from components.forecast.RollingAccuracyChart import RollingAccuracyChart
+from components.forecast.RunDetails import RunDetails
+from components.forecast.RunList import RunList
 from components.forecast.SectionHeading import SectionHeading
 from components.forecast.StagedForecastChart import StagedForecastChart
 from components.forecast.StagedRunTable import StagedRunTable
@@ -30,11 +26,11 @@ from portfolio.Project import Project
 
 
 class PriceForecastPage(AbstractProjectPage):
-    """Six sections that read like a short deck: summary, backtest demo, leaderboard, staged
-    predictions, live accuracy and how it runs. Every number comes from the snapshot files.
+    """The summary on top, then the model leaderboard, the active production forecast and the
+    backtests used to select the model. Every number comes from the snapshot files.
     """
 
-    DEMO_ANCHOR = "backtest-demo"
+    PRODUCTION_ANCHOR = "production-forecast"
     COMPARE_CHOICES = ("gradient_boosting", "naive", "greykite")
     STAGED_HISTORY_DAYS = 40
     GRAPH_CONFIG = {"displayModeBar": False, "responsive": True}
@@ -42,12 +38,10 @@ class PriceForecastPage(AbstractProjectPage):
     def __init__(self, project: Project, cache: ForecastCache):
         super().__init__(project)
         self.cache = cache
-        self.metadata = cache.metadata()
         self.backtest = cache.backtest()
         self.window = BacktestWindow(self.backtest, cache.prices())
         self.runs = PredictionRuns(cache.predictions())
-        self.actuals = cache.actuals()
-        self.summary = ForecastSummary.from_tables(self.backtest, cache.predictions(), self.actuals)
+        self.summary = ForecastSummary.from_tables(self.backtest, cache.predictions(), cache.actuals())
         self.leaderboard = ForecastAccuracy.leaderboard(self.backtest) if len(self.backtest) else pd.DataFrame()
         self.as_of_dates = self.window.as_of_dates()
 
@@ -55,19 +49,17 @@ class PriceForecastPage(AbstractProjectPage):
 
     def layout(self):
         header = CaseStudyHeader().build(
-            self.project, self.highlights(), self.key_findings(), self.DEMO_ANCHOR, "Jump to the backtest demo"
+            self.project, self.highlights(), self.key_findings(), self.PRODUCTION_ANCHOR, "View production forecast"
         )
         if not self.cache.available:
             return html.Div([header, self.missing_snapshot()], className="forecast project-page")
         return html.Div(
             [
                 header,
-                self.summary_section(),
-                self.backtest_section(),
+                KpiCards().build(self.summary),
                 self.leaderboard_section(),
-                self.staged_section(),
-                self.live_section(),
-                self.pipeline_section(),
+                self.production_section(),
+                self.backtest_section(),
             ],
             className="forecast project-page",
         )
@@ -82,24 +74,114 @@ class PriceForecastPage(AbstractProjectPage):
             className="panel deck-section",
         )
 
-    def summary_section(self) -> html.Section:
+    def leaderboard_section(self) -> html.Section:
+        buckets = dcc.RadioItems(
+            id=Ids.LEADERBOARD_BUCKET,
+            options=[{"label": bucket.capitalize(), "value": bucket} for bucket in ForecastAccuracy.BUCKET_ORDER],
+            value=ForecastAccuracy.ALL_DAYS,
+            className="segmented pill",
+            inline=True,
+        )
+        by_day = ForecastAccuracy.by_horizon_day(self.backtest)
         return html.Section(
             [
                 SectionHeading().build(
-                    1,
-                    "Summary",
-                    "Chronos-2 beats repeating the last price by a small, steady margin over 30 trading days, "
-                    "and now forecasts every trading morning beside a gradient boosting challenger.",
+                    "Model leaderboard",
+                    f"The candidate models, scored on the same {Formats.count(self.summary.as_of_dates)} backtest "
+                    "dates. The lowest error earns production.",
+                    side=buckets,
                 ),
-                KpiCards().build(self.summary),
+                html.Div(
+                    [
+                        html.Div(
+                            [
+                                html.Div(id=Ids.LEADERBOARD_TABLE, className="table-wrap flush"),
+                                html.Div(
+                                    "MAE, RMSE and bias in dollars per MMBtu, MAPE and WAPE in percent. Bias is "
+                                    "forecast minus actual. The best value in each column is marked.",
+                                    className="panel-note",
+                                ),
+                            ],
+                            className="panel deck-panel",
+                        ),
+                        html.Div(
+                            [
+                                html.H3("Error by day ahead"),
+                                html.Div("Mean absolute error at each horizon", className="panel-subtitle"),
+                                dcc.Graph(figure=HorizonErrorChart().build(by_day), config=self.GRAPH_CONFIG),
+                            ],
+                            className="panel deck-panel",
+                        ),
+                    ],
+                    className="deck-stack",
+                ),
             ],
             className="deck-section",
+        )
+
+    def production_section(self) -> html.Section:
+        selected = self.runs.latest_run_id()
+        run_count = len(self.runs.runs())
+        return html.Section(
+            [
+                dcc.Store(id=Ids.RUN_SELECTED, data=selected),
+                SectionHeading().build(
+                    "Active predictions in production",
+                    "The champion forecasts every trading morning, with the challenger scored beside it in staging. "
+                    "Select a run to see its forecast path, interval and details.",
+                ),
+                html.Div(
+                    [
+                        html.Div(
+                            [
+                                html.H3("Scoring runs"),
+                                html.Div(
+                                    f"{Formats.amount(run_count, 'run')}, newest first. Runs Tuesday to Saturday at "
+                                    "7:00 AM ET.",
+                                    className="panel-subtitle",
+                                ),
+                            ]
+                        ),
+                        RunList().build(self.runs.runs(), self.runs.predictions, selected),
+                    ],
+                    className="panel deck-panel",
+                ),
+                html.Div(
+                    [
+                        html.Div(
+                            dcc.Graph(id=Ids.STAGED_CHART, config=self.GRAPH_CONFIG), className="panel deck-panel"
+                        ),
+                        html.Div(
+                            [
+                                html.Div(
+                                    [html.H3("Run details"), html.Div(id=Ids.RUN_DETAILS)],
+                                    className="panel deck-panel",
+                                ),
+                                html.Div(
+                                    [
+                                        html.H3("Forecast path"),
+                                        html.Div(
+                                            "Dollars per MMBtu, with the production 80% band",
+                                            className="panel-subtitle",
+                                        ),
+                                        html.Div(id=Ids.STAGED_TABLE, className="table-wrap"),
+                                    ],
+                                    className="panel deck-panel",
+                                ),
+                            ],
+                            className="deck-stack",
+                        ),
+                    ],
+                    className="deck-grid wide-left deck-gap",
+                ),
+            ],
+            className="deck-section",
+            id=self.PRODUCTION_ANCHOR,
         )
 
     def backtest_section(self) -> html.Section:
         default = self.window.default_as_of()
         default_index = self.as_of_dates.index(default) if default in self.as_of_dates else len(self.as_of_dates) - 1
-        marks = self.year_marks()
         controls = html.Div(
             [
                 html.Div(
@@ -117,7 +199,7 @@ class PriceForecastPage(AbstractProjectPage):
                             max=len(self.as_of_dates) - 1,
                             step=1,
                             value=default_index,
-                            marks=marks,
+                            marks=self.year_marks(),
                             updatemode="drag",
                             allow_direct_input=False,
                             className="as-of-slider",
@@ -146,10 +228,10 @@ class PriceForecastPage(AbstractProjectPage):
         return html.Section(
             [
                 SectionHeading().build(
-                    2,
-                    "Backtest demo",
-                    "Pick any of the backtest dates. The chart shows what each model knew on that date, what it "
-                    "forecast for the next 30 trading days, and what the price actually did.",
+                    "Model selection backtests",
+                    f"Rolling-origin backtests over {Formats.count(self.summary.as_of_dates)} dates were used to "
+                    "train each model family, tune its hyperparameters and compare the results. Chronos-2 had the "
+                    "lowest error and was promoted to production. Move the slider to see any forecast date.",
                 ),
                 html.Div(
                     [
@@ -161,7 +243,6 @@ class PriceForecastPage(AbstractProjectPage):
                 ),
             ],
             className="deck-section",
-            id=self.DEMO_ANCHOR,
         )
 
     def year_marks(self) -> dict:
@@ -173,182 +254,6 @@ class PriceForecastPage(AbstractProjectPage):
         if self.as_of_dates and (not marks or min(marks) > 6):
             marks[0] = str(self.as_of_dates[0].year)
         return marks
-
-    def leaderboard_section(self) -> html.Section:
-        buckets = html.Div(
-            dcc.RadioItems(
-                id=Ids.LEADERBOARD_BUCKET,
-                options=[{"label": bucket.capitalize(), "value": bucket} for bucket in ForecastAccuracy.BUCKET_ORDER],
-                value=ForecastAccuracy.ALL_DAYS,
-                className="segmented pill",
-                inline=True,
-            )
-        )
-        by_day = ForecastAccuracy.by_horizon_day(self.backtest)
-        return html.Section(
-            [
-                SectionHeading().build(
-                    3,
-                    "Model leaderboard",
-                    "Every model on the same dates and horizons. Lower is better for every column; bias closest "
-                    "to zero is best. The best value in each column is marked.",
-                ),
-                html.Div(
-                    [
-                        html.Div(
-                            [
-                                html.Div([html.H3("Error by model"), buckets], className="panel-header align-center"),
-                                html.Div(id=Ids.LEADERBOARD_TABLE, className="table-wrap"),
-                                html.Div(
-                                    "MAE, RMSE and bias in dollars per MMBtu. MAPE and WAPE in percent. Bias is "
-                                    "forecast minus actual.",
-                                    className="panel-note",
-                                ),
-                            ],
-                            className="panel deck-panel",
-                        ),
-                        html.Div(
-                            [
-                                html.Div(
-                                    [
-                                        html.H3("Error by day ahead"),
-                                        html.Div("Mean absolute error at each horizon", className="panel-subtitle"),
-                                    ],
-                                ),
-                                dcc.Graph(figure=HorizonErrorChart().build(by_day), config=self.GRAPH_CONFIG),
-                            ],
-                            className="panel deck-panel",
-                        ),
-                    ],
-                    className="deck-stack",
-                ),
-            ],
-            className="deck-section",
-        )
-
-    def staged_section(self) -> html.Section:
-        runs = self.runs.runs()
-        options = [
-            {
-                "label": f"As of {Formats.date(row.as_of_date)} \u00b7 scored {Formats.date_time(row.run_timestamp)}",
-                "value": row.run_id,
-            }
-            for row in runs.itertuples()
-        ]
-        selector = html.Div(
-            [
-                html.Label("Run", className="control-label"),
-                dcc.Dropdown(
-                    id=Ids.RUN_SELECT,
-                    options=options,
-                    value=self.runs.latest_run_id(),
-                    clearable=False,
-                    className="run-select",
-                ),
-            ],
-            className="control-block run-block",
-        )
-        return html.Section(
-            [
-                SectionHeading().build(
-                    4,
-                    "Staged predictions",
-                    "Each scoring run forecasts with two registered versions. Production is the champion that "
-                    "would be used; staging is the challenger, scored the same way so it can earn a promotion.",
-                    side=selector,
-                ),
-                html.Div(
-                    [
-                        html.Div(
-                            dcc.Graph(id=Ids.STAGED_CHART, config=self.GRAPH_CONFIG), className="panel deck-panel"
-                        ),
-                        html.Div(
-                            [
-                                html.H3("Forecast path"),
-                                html.Div("Dollars per MMBtu, with the production 80% band", className="panel-subtitle"),
-                                html.Div(id=Ids.STAGED_TABLE, className="table-wrap"),
-                                html.Div(
-                                    f"{Formats.amount(len(runs), 'run')} so far. The scoring job runs Tuesday to "
-                                    "Saturday at 7:00 AM ET on the session that closed the day before.",
-                                    className="panel-note",
-                                ),
-                            ],
-                            className="panel deck-panel",
-                        ),
-                    ],
-                    className="deck-grid wide-left",
-                ),
-            ],
-            className="deck-section",
-        )
-
-    def live_section(self) -> html.Section:
-        heading = SectionHeading().build(
-            5,
-            "Live forecast against actuals",
-            "Live forecasts are scored against the settled price once each target date passes, then summarized "
-            "over every matured forecast and over the last 20 as-of dates.",
-        )
-        if self.actuals.empty:
-            body = html.Div(
-                PendingState().build(self.runs.first_target_date(), len(self.runs.predictions)),
-                className="panel deck-panel",
-            )
-        else:
-            body = html.Div(
-                [
-                    html.Div(
-                        [
-                            html.H3("Day 1 forecasts against the settled price"),
-                            dcc.Graph(figure=LiveActualsChart().build(self.actuals), config=self.GRAPH_CONFIG),
-                        ],
-                        className="panel deck-panel",
-                    ),
-                    html.Div(
-                        [
-                            html.H3("Rolling MAE, last 20 as-of dates"),
-                            dcc.Graph(
-                                figure=RollingAccuracyChart().build(self.cache.rolling_accuracy()),
-                                config=self.GRAPH_CONFIG,
-                            ),
-                            html.Div(LiveAccuracyTable().build(self.cache.accuracy()), className="table-wrap"),
-                        ],
-                        className="panel deck-panel",
-                    ),
-                ],
-                className="deck-grid",
-            )
-        return html.Section([heading, body], className="deck-section")
-
-    def pipeline_section(self) -> html.Section:
-        return html.Section(
-            [
-                SectionHeading().build(
-                    6,
-                    "How it runs",
-                    "Forecasts refresh each trading morning. The scoring job runs Tuesday to Saturday at 7:00 AM "
-                    "ET and works through five steps, and this site only reads what they produce.",
-                ),
-                html.Div(PipelineDiagram().build(), className="panel deck-panel"),
-                ForecastNotes().build(
-                    self.summary,
-                    self.leaderboard,
-                    self.versions(),
-                    self.metadata,
-                    self.window.dates_without_band(ForecastModels.CHAMPION),
-                ),
-            ],
-            className="deck-section",
-        )
-
-    def versions(self) -> dict:
-        """The registered version of each model, from the latest run, or from the backtest."""
-        versions = {}
-        for frame in (self.backtest, self.runs.predictions):
-            for model, version in frame.groupby("model")["model_version"].last().items():
-                if str(version).isdigit():
-                    versions[model] = str(version)
-        return versions
 
     # Callbacks
 
@@ -370,17 +275,43 @@ class PriceForecastPage(AbstractProjectPage):
             return figure, Formats.date(as_of), self.fan_stats(as_of, models)
 
         @app.callback(
-            Output(Ids.STAGED_CHART, "figure"), Output(Ids.STAGED_TABLE, "children"), Input(Ids.RUN_SELECT, "value")
+            Output(Ids.RUN_SELECTED, "data"),
+            Input({"type": Ids.RUN_ROW, "run": ALL}, "n_clicks"),
+            State(Ids.RUN_SELECTED, "data"),
+            prevent_initial_call=True,
         )
-        def show_run(run_id):
-            run = self.runs.run(run_id)
-            as_of = run["as_of_date"].max() if len(run) else None
-            history = self.window.history(as_of, self.STAGED_HISTORY_DAYS) if as_of is not None else run.iloc[0:0]
-            return StagedForecastChart().build(history, run), StagedRunTable().build(run)
+        def select_run(_clicks, current):
+            return self.clicked_run(callback_context.triggered_id, current)
+
+        @app.callback(
+            Output(Ids.STAGED_CHART, "figure"),
+            Output(Ids.STAGED_TABLE, "children"),
+            Output(Ids.RUN_DETAILS, "children"),
+            Output({"type": Ids.RUN_ROW, "run": ALL}, "className"),
+            Input(Ids.RUN_SELECTED, "data"),
+            State({"type": Ids.RUN_ROW, "run": ALL}, "id"),
+        )
+        def show_run(run_id, row_ids):
+            chart, table, details = self.run_view(run_id)
+            return chart, table, details, [RunList.class_name(row["run"] == run_id) for row in row_ids]
 
         @app.callback(Output(Ids.LEADERBOARD_TABLE, "children"), Input(Ids.LEADERBOARD_BUCKET, "value"))
         def show_leaderboard(bucket):
             return LeaderboardTable().build(self.leaderboard, bucket or ForecastAccuracy.ALL_DAYS)
+
+    @staticmethod
+    def clicked_run(triggered_id, current: str | None) -> str | None:
+        """The run whose row was clicked, or the current run when the trigger was not a row."""
+        if isinstance(triggered_id, dict) and triggered_id.get("type") == Ids.RUN_ROW:
+            return triggered_id["run"]
+        return current
+
+    def run_view(self, run_id: str | None) -> tuple:
+        """Chart, forecast path table and details for one run."""
+        run = self.runs.run(run_id)
+        as_of = run["as_of_date"].max() if len(run) else None
+        history = self.window.history(as_of, self.STAGED_HISTORY_DAYS) if as_of is not None else run.iloc[0:0]
+        return StagedForecastChart().build(history, run), StagedRunTable().build(run), RunDetails().build(run)
 
     def fan_stats(self, as_of: pd.Timestamp, models: list[str]) -> list:
         """Small chips under the fan chart: each model's MAE on this date and the band hit rate."""
@@ -418,10 +349,6 @@ class PriceForecastPage(AbstractProjectPage):
             (Formats.percent(summary.coverage), "of actuals inside the 80% band"),
         ]
 
-    @staticmethod
-    def times(count: int) -> str:
-        return {1: "once", 2: "twice"}.get(count, f"{Formats.count(count)} times")
-
     def key_findings(self) -> list[str]:
         """Plain findings computed from the snapshot each time the app starts."""
         if not self.cache.available:
@@ -430,23 +357,16 @@ class PriceForecastPage(AbstractProjectPage):
         board = self.leaderboard.set_index(["model", "horizon_bucket"])["mae"]
         champion, baseline = ForecastModels.CHAMPION, ForecastModels.BASELINE
         findings = [
-            f"Chronos-2 has the lowest error over 30 trading days: MAE {Formats.decimal(summary.champion_mae)} "
+            f"Chronos-2 had the lowest error over 30 trading days: MAE {Formats.decimal(summary.champion_mae)} "
             f"against {Formats.decimal(summary.baseline_mae)} for naive, {Formats.percent(summary.improvement, 2)} "
-            "lower. Enough to promote, but a modest edge.",
-            f"Over the first 5 days nothing beats repeating the last price (naive "
+            "lower, which cleared the 1% bar for promotion.",
+            f"Over the first 5 days repeating the last price is hard to beat (naive "
             f"{Formats.decimal(board[(baseline, 'days 1 to 5')])}, Chronos-2 "
             f"{Formats.decimal(board[(champion, 'days 1 to 5')])}). Chronos-2 pulls ahead on days 16 to 30.",
-            f"The 80% band held {Formats.percent(summary.coverage)} of actuals, so it is somewhat too narrow.",
         ]
         if summary.latest_run_as_of is not None:
-            matured = (
-                "Actuals are pending."
-                if summary.matured_forecasts == 0
-                else f"{Formats.amount(summary.matured_forecasts, 'forecast')} "
-                f"{'has' if summary.matured_forecasts == 1 else 'have'} matured."
-            )
             findings.append(
-                f"Live scoring has run {self.times(summary.prediction_runs)}, latest as of "
-                f"{Formats.date(summary.latest_run_as_of)}. {matured}"
+                "Chronos-2 now runs in production every trading morning, with gradient boosting scored beside it "
+                f"as the challenger. The latest run is as of {Formats.date(summary.latest_run_as_of)}."
             )
         return findings

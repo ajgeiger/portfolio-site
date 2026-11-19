@@ -28,7 +28,8 @@ class AskMethodNote:
         if info is None:
             label, line, state = AskCopy.STATUS_OFFLINE, AskCopy.OFFLINE_LINE, "is-offline"
         elif info.get("demo_mode"):
-            label, line, state = AskCopy.STATUS_DEMO, AskCopy.DEMO_LINE, "is-demo"
+            # demo_mode is the service's name for running without a language model
+            label, line, state = AskCopy.STATUS_RETRIEVAL, AskCopy.RETRIEVAL_LINE, "is-retrieval"
         else:
             label, line, state = AskCopy.STATUS_ONLINE, AskCopy.MODEL_LINE.format(model=info["llm_model"]), "is-online"
         return [

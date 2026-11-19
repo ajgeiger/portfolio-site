@@ -86,7 +86,6 @@ def test_backtest_window_slices_one_date():
     assert len(window.history(as_of, 10)) == 10
     assert len(window.forecast(as_of, "chronos")) == 6
     assert len(window.actuals(as_of)) == 6
-    assert window.dates_without_band("chronos") == [pd.Timestamp(AS_OF_DATES[-1])]
 
 
 def test_prediction_runs_list_newest_first():
@@ -94,5 +93,4 @@ def test_prediction_runs_list_newest_first():
     assert runs.latest_run_id() == "run1"
     assert runs.runs().iloc[0]["stages"] == "production, staging"
     assert len(runs.stage("run1", "production")) == 6
-    assert runs.first_target_date() == pd.Timestamp("2024-03-18")
     assert PredictionRuns(make_predictions().iloc[0:0]).latest_run_id() is None

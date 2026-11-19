@@ -6,7 +6,7 @@ from data.AbstractDataSource import AbstractDataSource
 
 
 class FrameDataSource(AbstractDataSource):
-    """Serve tables passed in directly. Useful for tests, demos and notebooks."""
+    """Serve tables passed in directly. Useful for tests and notebooks."""
 
     def __init__(
         self,
