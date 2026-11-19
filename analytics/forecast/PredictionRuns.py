@@ -39,7 +39,3 @@ class PredictionRuns:
     def stage(self, run_id: str | None, stage: str) -> pd.DataFrame:
         rows = self.run(run_id)
         return rows[rows["stage"] == stage].reset_index(drop=True)
-
-    def first_target_date(self) -> pd.Timestamp | None:
-        """The earliest target date across every run, when the first actual can arrive."""
-        return None if self.empty else pd.Timestamp(self.predictions["target_date"].min())

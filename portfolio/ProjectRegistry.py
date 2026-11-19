@@ -59,9 +59,8 @@ class ProjectRegistry:
                 slug="natural-gas-price-forecast",
                 title="Natural Gas Price Forecast",
                 summary=(
-                    "Can a model beat repeating the last price for natural gas futures, 30 trading days out? "
-                    "Rolling backtests of four models, and a champion and challenger that now forecast every "
-                    "trading morning."
+                    "A Chronos-2 forecast of natural gas futures in production, scored every trading morning beside "
+                    "a gradient boosting challenger, selected through rolling backtests of four model families."
                 ),
                 question="Can a model forecast natural gas futures better than repeating the last price?",
                 data=(
@@ -71,8 +70,8 @@ class ProjectRegistry:
                 ),
                 approach=(
                     "Chronos-2, gradient boosting, Greykite and a naive baseline, backtested on the same rolling "
-                    "dates with no look-ahead and tracked in MLflow. The winner is promoted only when it beats "
-                    "naive by at least 1%. This page reads a snapshot of the results; nothing is retrained here."
+                    "dates with no look-ahead. The winner is promoted only when it beats naive by at least 1%, then "
+                    "registered in MLflow and scored each trading morning beside the challenger."
                 ),
                 tags=("Forecasting", "Time series", "MLflow", "Plotly Dash"),
                 thumbnail="images/natural-gas-price-forecast.png",

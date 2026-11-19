@@ -21,12 +21,6 @@ class BacktestWindow:
         source = with_band if len(with_band) else self.backtest
         return None if source.empty else pd.Timestamp(source["as_of_date"].max())
 
-    def dates_without_band(self, model: str) -> list[pd.Timestamp]:
-        """As-of dates where this model has forecasts but no interval."""
-        rows = self.backtest[self.backtest["model"] == model]
-        has_band = rows.groupby("as_of_date")["lower"].apply(lambda values: values.notna().any())
-        return sorted(pd.Timestamp(date) for date in has_band[~has_band].index)
-
     def history(self, as_of: pd.Timestamp, days: int = HISTORY_DAYS) -> pd.DataFrame:
         """The last trading days up to and including the as-of date."""
         return self.prices[self.prices["date"] <= pd.Timestamp(as_of)].tail(days)

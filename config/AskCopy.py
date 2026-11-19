@@ -33,10 +33,10 @@ class AskCopy:
         "The resume and project pages cover the same material."
     )
     STATUS_ONLINE = "Online"
-    STATUS_DEMO = "Online, demo mode"
+    STATUS_RETRIEVAL = "Online, retrieval only"
     STATUS_OFFLINE = "Offline"
     MODEL_LINE = "Answers are written by {model}."
-    DEMO_LINE = "No language model is connected, so answers quote the closest passages."
+    RETRIEVAL_LINE = "No language model is connected, so answers quote the closest passages."
     OFFLINE_LINE = "The service did not respond. Questions will work again once it is back."
 
     METHOD_TITLE = "HOW IT WORKS"

@@ -7,11 +7,14 @@ from dash import Dash
 from analytics.forecast.BacktestWindow import BacktestWindow
 from analytics.forecast.ForecastAccuracy import ForecastAccuracy
 from components.forecast.BacktestFanChart import BacktestFanChart
+from components.forecast.ForecastIds import ForecastIds
 from components.forecast.HorizonErrorChart import HorizonErrorChart
 from components.forecast.LeaderboardTable import LeaderboardTable
-from components.forecast.LiveActualsChart import LiveActualsChart
-from components.forecast.RollingAccuracyChart import RollingAccuracyChart
+from components.forecast.RunDetails import RunDetails
+from components.forecast.RunList import RunList
+from components.forecast.SectionHeading import SectionHeading
 from components.forecast.StagedForecastChart import StagedForecastChart
+from components.forecast.StagedRunTable import StagedRunTable
 from config.Settings import Settings
 from data.forecast.ForecastCache import ForecastCache
 from data.forecast.ForecastSnapshotBuilder import ForecastSnapshotBuilder
@@ -92,21 +95,38 @@ def test_staged_chart_shows_both_stages_with_versions(cache_factory):
 def test_charts_fall_back_to_a_note_when_empty(cache_factory):
     cache = cache_factory()
     assert StagedForecastChart().build(cache.prices(), cache.predictions().iloc[0:0]).layout.annotations
-    assert LiveActualsChart().build(cache.actuals()).layout.annotations
-    assert RollingAccuracyChart().build(cache.rolling_accuracy()).layout.annotations
+    assert HorizonErrorChart().build(ForecastAccuracy.by_horizon_day(cache.backtest().iloc[0:0])).layout.annotations
 
 
-def test_live_charts_draw_matured_forecasts(cache_factory):
-    cache = cache_factory(actuals=True)
-    assert trace_names(LiveActualsChart().build(cache.actuals())) == [
-        "Actual",
-        "Production forecast",
-        "Staging forecast",
-    ]
-    assert trace_names(RollingAccuracyChart().build(cache.rolling_accuracy(), "days 1 to 5")) == [
-        "Production",
-        "Staging",
-    ]
+def test_run_list_has_one_clickable_row_per_run_with_day_one_values(cache_factory):
+    cache = cache_factory()
+    runs = (
+        cache.predictions()
+        .groupby("run_id", as_index=False)
+        .agg(as_of_date=("as_of_date", "max"), run_timestamp=("run_timestamp", "min"))
+    )
+    listing = RunList().build(runs, cache.predictions(), "run1")
+    header, row = listing.children
+    assert row.id == {"type": ForecastIds.RUN_ROW, "run": "run1"}
+    assert row.className == RunList.SELECTED_CLASS
+    assert "3.510" in text_of(row)
+    assert RunList.class_name(False) == RunList.ROW_CLASS
+    assert "No production runs" in text_of(RunList().build(runs.iloc[0:0], cache.predictions(), None))
+
+
+def test_run_details_and_path_table_describe_the_run(cache_factory):
+    run = cache_factory().predictions()
+    details = text_of(RunDetails().build(run))
+    for expected in ("run1", "Mar 15, 2024", "6 trading days", "Chronos-2 v8", "Gradient boosting v9"):
+        assert expected in details
+    table = text_of(StagedRunTable().build(run))
+    assert "3.300 to 3.700" in table
+    assert "Staging" in table
+
+
+def test_section_heading_has_no_number():
+    heading = SectionHeading().build("Model leaderboard", "Lead.")
+    assert text_of(heading).split() == ["Model", "leaderboard", "Lead."]
 
 
 def test_leaderboard_marks_the_best_value_and_compares_with_naive(cache_factory):
@@ -120,34 +140,37 @@ def test_leaderboard_marks_the_best_value_and_compares_with_naive(cache_factory)
     assert "Baseline" in text_of(table)
 
 
-def test_page_shows_six_sections_and_a_pending_state(cache_factory):
+def test_page_order_and_copy(cache_factory):
     page = PriceForecastPage(make_forecast_project(), cache_factory())
-    layout = page.layout()
-    text = text_of(layout)
-    for title in ("Summary", "Backtest demo", "Model leaderboard", "Staged predictions", "How it runs"):
-        assert title in text
-    assert "Actuals pending" in text
-    assert "Mar 18, 2024" in text
-    assert "days 11 to 30" in text
+    text = text_of(page.layout())
+    titles = ["Model leaderboard", "Active predictions in production", "Model selection backtests"]
+    positions = [text.index(title) for title in titles]
+    assert positions == sorted(positions)
+    assert "View production forecast" in text
+    for removed in ("Summary", "Error by model", "Staged predictions", "How it runs", "Caveats", "pending"):
+        assert removed not in text
+    assert not re.search("demo", text, re.IGNORECASE)
+    assert "deck-number" not in str(page.layout())
     assert not JOB_SEEKING.search(text)
     assert not LONG_DASHES.search(text)
     assert not re.search("signature aviation|fuel demand", text, re.IGNORECASE)
     page.register_callbacks(Dash(__name__))
 
 
-def test_page_shows_live_accuracy_once_actuals_arrive(cache_factory):
-    page = PriceForecastPage(make_forecast_project(), cache_factory(actuals=True))
-    text = text_of(page.layout())
-    assert "Actuals pending" not in text
-    assert "Rolling MAE" in text
-    assert "has run once" in " ".join(page.key_findings())
+def test_clicking_a_run_selects_it(cache_factory):
+    page = PriceForecastPage(make_forecast_project(), cache_factory())
+    assert page.clicked_run({"type": ForecastIds.RUN_ROW, "run": "run9"}, "run1") == "run9"
+    assert page.clicked_run(None, "run1") == "run1"
+    chart, table, details = page.run_view("run1")
+    assert "Production: Chronos-2 v8" in trace_names(chart)
+    assert "run1" in text_of(details)
 
 
 def test_page_highlights_are_read_from_the_data(cache_factory):
     page = PriceForecastPage(make_forecast_project(), cache_factory())
     assert page.highlights()[0] == ("66.67%", "lower MAE than naive")
     assert page.highlights()[1] == ("3", "backtest dates")
-    assert page.versions() == {"chronos": "8", "gradient_boosting": "9"}
+    assert "latest run is as of Mar 15, 2024" in " ".join(page.key_findings())
 
 
 def test_page_without_a_snapshot_still_renders(tmp_path):
@@ -162,4 +185,6 @@ def test_default_registry_lists_the_forecast_with_its_thumbnail():
     project = projects["natural-gas-price-forecast"]
     assert project.route == "/projects/natural-gas-price-forecast"
     assert (ASSETS / project.thumbnail).exists()
-    assert not JOB_SEEKING.search(" ".join([project.summary, project.question, project.data, project.approach]))
+    copy = " ".join([project.summary, project.question, project.data, project.approach])
+    assert not JOB_SEEKING.search(copy)
+    assert "demo" not in copy.lower()

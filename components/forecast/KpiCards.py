@@ -38,7 +38,7 @@ class KpiCards:
                 "muted",
             ),
             (
-                "Latest live run",
+                "Latest production run",
                 Formats.date(summary.latest_run_as_of) if summary.latest_run_as_of is not None else "None yet",
                 self.run_detail(summary),
                 "navy",
