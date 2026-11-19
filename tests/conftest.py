@@ -1,0 +1,201 @@
+"""Small, hand made fixtures so tests never depend on the real 41k article corpus."""
+
+import httpx
+import pandas as pd
+import pytest
+from rag_chatbot_client import ChatbotClient
+from scipy import sparse
+
+from analytics.KeywordNamer import KeywordNamer
+from analytics.TopicTreeBuilder import TopicTreeBuilder
+from config.Settings import Settings
+from data.FrameDataSource import FrameDataSource
+from pages.TopicExplorerPage import TopicExplorerPage
+from portfolio.Project import Project
+from portfolio.ProjectRegistry import ProjectRegistry
+
+LOAD_TIME = pd.Timestamp("2026-11-18 22:00", tz="UTC")
+
+VOCABULARY = ["election", "senate", "vote", "football", "cup", "goal", "storm", "rain"]
+
+# One row per topic. Topics 0 and 1 talk politics, 2 and 3 talk football, 4 talks weather.
+PROFILES = [
+    [0.9, 0.6, 0.3, 0.0, 0.0, 0.0, 0.0, 0.0],
+    [0.7, 0.8, 0.5, 0.0, 0.0, 0.0, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.9, 0.6, 0.4, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.6, 0.9, 0.5, 0.0, 0.0],
+    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.7],
+]
+
+TOPIC_WORDS = {
+    topic: [(VOCABULARY[column], score) for column, score in sorted(enumerate(row), key=lambda item: -item[1]) if score]
+    for topic, row in enumerate(PROFILES)
+}
+TOPIC_WORDS[-1] = [("new", 0.5), ("year", 0.4)]
+TOPIC_SIZES = {0: 6, 1: 4, 2: 5, 3: 3, 4: 2, -1: 4}
+
+
+def make_articles() -> pd.DataFrame:
+    """Twenty four articles: twenty in topics or unassigned, plus two blank rows and two old dates."""
+    rows = []
+    number = 0
+    for topic, size in TOPIC_SIZES.items():
+        for index in range(size):
+            hours_back = 1 + (index * 5) % 20
+            rows.append(
+                {
+                    "id": f"article_{number}",
+                    "topic_id": topic,
+                    "published_at": LOAD_TIME - pd.Timedelta(hours=hours_back),
+                    "source": "wire.example" if index % 2 else "daily.example",
+                    "source_type": "rss" if index % 3 == 0 else "gdelt",
+                    "title": f"Headline {number} about topic {topic}",
+                    "summary": f"Summary {number}",
+                    "url": f"https://news.example/{number}",
+                    "has_text": True,
+                    "is_repeat_text": False,
+                    "date_flag": "ok",
+                }
+            )
+            number += 1
+    for index in range(2):
+        rows.append(
+            {
+                "id": f"blank_{index}",
+                "topic_id": -2,
+                "published_at": LOAD_TIME - pd.Timedelta(hours=2),
+                "source": "daily.example",
+                "source_type": "gdelt",
+                "title": "",
+                "summary": "",
+                "url": "",
+                "has_text": False,
+                "is_repeat_text": False,
+                "date_flag": "ok",
+            }
+        )
+    articles = pd.DataFrame(rows)
+    articles.loc[0, "published_at"] = pd.Timestamp("2004-03-05", tz="UTC")
+    articles.loc[0, "date_flag"] = "stale"
+    return articles
+
+
+def make_topics() -> pd.DataFrame:
+    rows = []
+    namer = KeywordNamer()
+    for topic in [-1, 0, 1, 2, 3, 4]:
+        keywords = [word for word, _ in TOPIC_WORDS[topic]]
+        rows.append(
+            {
+                "topic_id": topic,
+                "document_count": TOPIC_SIZES[topic],
+                "keywords": keywords,
+                "keyword_scores": [score for _, score in TOPIC_WORDS[topic]],
+                "keyword_name": namer.name(keywords) if topic >= 0 else "Unassigned",
+                "representative_ids": [],
+            }
+        )
+    topics = pd.DataFrame(rows)
+    topics.at[1, "representative_ids"] = ["article_5"]
+    return topics
+
+
+@pytest.fixture
+def tree() -> pd.DataFrame:
+    builder = TopicTreeBuilder(latent_themes=3)
+    counts = {topic: size for topic, size in TOPIC_SIZES.items() if topic >= 0}
+    return builder.build(sparse.csr_matrix(PROFILES), [0, 1, 2, 3, 4], counts, TOPIC_WORDS)
+
+
+@pytest.fixture
+def articles() -> pd.DataFrame:
+    return make_articles()
+
+
+@pytest.fixture
+def data_source(tree, articles) -> FrameDataSource:
+    metadata = {
+        "last_load_time": LOAD_TIME.isoformat(),
+        "article_rows": len(articles),
+        "rows_with_text": int(articles["has_text"].sum()),
+        "topic_count": 5,
+        "repeat_text_rows": 0,
+        "earliest_published": str(articles["published_at"].min()),
+        "stale_date_rows": 1,
+        "future_date_rows": 0,
+        "stale_after_days": 30,
+    }
+    return FrameDataSource(articles, make_topics(), tree, metadata, name="Test data")
+
+
+def make_project(data_source: FrameDataSource, slug: str = "news-topic-explorer") -> Project:
+    return Project(
+        slug=slug,
+        title="News Topic Explorer",
+        summary="A test summary.",
+        question="What is the news talking about?",
+        data="Hand made test articles.",
+        approach="A small topic tree.",
+        tags=("Testing",),
+        thumbnail="images/news-topic-explorer.png",
+        repo_url="https://github.com/ajgeiger",
+        repo_label="Code on GitHub",
+        build_page=lambda project: TopicExplorerPage(project, data_source, Settings()),
+    )
+
+
+@pytest.fixture
+def project(data_source) -> Project:
+    return make_project(data_source)
+
+
+@pytest.fixture
+def registry(project) -> ProjectRegistry:
+    return ProjectRegistry([project])
+
+
+CHAT_REPLY = {
+    "answer": "He is the Lead Applied AI Scientist at Signature Aviation.",
+    "status": "answered",
+    "citations": [
+        {
+            "number": 1,
+            "chunk_id": "resume-001",
+            "source": "Resume",
+            "section": "Name and current title",
+            "text": "Alexander Geiger. Lead Applied AI Scientist.",
+            "score": 0.03,
+        }
+    ],
+    "sources": ["Resume"],
+    "provider": "fake",
+    "model": "fake",
+    "index_version": "abc",
+    "took_ms": 4.0,
+}
+INFO_REPLY = {"llm_provider": "anthropic", "llm_model": "claude-sonnet-5-5", "demo_mode": False}
+
+
+def make_chatbot_client(handler) -> ChatbotClient:
+    """A chatbot client whose requests go to handler instead of the network."""
+    return ChatbotClient(http=httpx.Client(base_url="http://chatbot.test", transport=httpx.MockTransport(handler)))
+
+
+def answering_handler(request: httpx.Request) -> httpx.Response:
+    if request.url.path == "/chat":
+        return httpx.Response(200, json=CHAT_REPLY)
+    return httpx.Response(200, json=INFO_REPLY)
+
+
+def offline_handler(request: httpx.Request) -> httpx.Response:
+    raise httpx.ConnectError("connection refused")
+
+
+@pytest.fixture
+def chatbot():
+    return make_chatbot_client(answering_handler)
+
+
+@pytest.fixture
+def offline_chatbot():
+    return make_chatbot_client(offline_handler)
