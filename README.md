@@ -1,6 +1,6 @@
-# Alex Geiger, Lead Data Scientist: Portfolio Site
+# Alex Geiger, Lead Applied AI Scientist: Portfolio Site
 
-A personal portfolio website built in Plotly Dash. It presents who I am and how I work, then lets visitors open live analytics projects on real data. The first project is the **News Topic Explorer**: 41,371 news articles grouped into 283 topics by Headline Radar, my own BERTopic style topic model, turned into a map you can walk from the whole corpus down to single headlines.
+A personal portfolio website built in Plotly Dash. It covers my background and resume, and hosts analytics projects on real data that visitors can open and explore. The first project is the **News Topic Explorer**: 41,371 news articles grouped into 283 topics by Headline Radar, my own BERTopic style topic model, turned into a map you can walk from the whole corpus down to single headlines.
 
 **[Run it in three commands](#run-it)** &nbsp;\|&nbsp; [The website](#the-website) &nbsp;\|&nbsp; [Add a project](#add-a-project) &nbsp;\|&nbsp; [News Topic Explorer](#news-topic-explorer) &nbsp;\|&nbsp; [Data flow](#data-flow) &nbsp;\|&nbsp; [Sources](#sources)
 
@@ -10,11 +10,16 @@ A personal portfolio website built in Plotly Dash. It presents who I am and how 
 
 | Address | Page | What it does |
 | --- | --- | --- |
-| `/` | Home | Hero with the value proposition, background (Lead Data Scientist, the Signature Aviation enterprise AI platform, Syracuse University), featured projects with numbers read from their data, how I work, about and contact. |
+| `/` | Home | Short introduction, background (Lead Applied AI Scientist at Signature Aviation, the enterprise AI platform, Syracuse University), featured projects with numbers read from their data, how I work, about and contact links. |
 | `/projects` | Projects | One card per registered project: screenshot, summary, tags, headline numbers, a link to the live page and to the code. |
+| `/resume` | Resume | A plain summary of the resume (experience, education, certifications, skills) and the PDF download. |
 | `/projects/news-topic-explorer` | News Topic Explorer | A short case study (question, data, approach, key findings) above the live explorer. |
 
-Every page shares a sticky header (Home, Projects, About, Contact), a footer with GitHub and Kaggle links, and a layout that adapts down to phone width. Numbers on the home and projects pages are computed from each project's data when the site starts, so they never drift from the app.
+Every page shares a sticky header (Home, Projects, Resume, About, Contact), a footer with GitHub and Kaggle links, and a layout that adapts down to phone width. Numbers on the home and projects pages are computed from each project's data when the site starts, so they never drift from the app.
+
+The resume PDF is served from `assets/files/Alexander_Geiger_Resume.pdf`. The home page hero, the About section and the resume page link to it with "Download resume (PDF)". The resume page text lives in `config/Resume.py` and follows the PDF.
+
+![Resume page](docs/images/resume.png)
 
 ![Projects index](docs/images/projects.png)
 
@@ -121,6 +126,8 @@ flowchart LR
     AN --> PG["TopicExplorerPage"]
     PG --> REG["ProjectRegistry"]
     REG --> HOME["HomePage and ProjectsPage"]
+    RES["Resume and resume PDF"] --> RP["ResumePage"]
+    RP --> APP
     REG --> APP["PortfolioApp"]
     HOME --> APP
     PG --> EX["topic_labels.json and .csv"]
@@ -153,13 +160,13 @@ Tests use small hand made fixtures, never the real corpus.
 ```text
 app.py                  start the portfolio website
 build_cache.py          build the cache from Headline Radar outputs
-config/                 Settings, Profile, Theme, Formats
+config/                 Settings, Profile, Resume, Position, Theme, Formats
 data/                   readers, CacheBuilder and data sources
 analytics/              tree building, navigation, trends, search, labels
-components/             site shell, project cards, case study header, explorer parts
-pages/                  AbstractPage, AbstractProjectPage, HomePage, ProjectsPage, TopicExplorerPage
+components/             site shell, project cards, resume link, case study header, explorer parts
+pages/                  AbstractPage, AbstractProjectPage, HomePage, ProjectsPage, ResumePage, TopicExplorerPage
 portfolio/              PortfolioApp, Project, ProjectRegistry
-assets/                 style.css, anchor_scroll.js and project thumbnails
+assets/                 style.css, anchor_scroll.js, project thumbnails and the resume PDF
 tests/                  pytest suite with small fixtures
 docs/images/            screenshots captured from the running app
 ```
