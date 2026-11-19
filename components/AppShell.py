@@ -11,7 +11,7 @@ from config.Profile import Profile
 class AppShell:
     """Build the site header, navigation and footer.
 
-    Navigation has two kinds of links: pages (Home, Projects, Resume) and anchors on
+    Navigation has two kinds of links: pages (Home, Projects, Resume, Ask) and anchors on
     the home page (About, Contact). Page links stay inside the app; anchor
     links are plain links that scroll to their section once it is drawn.
     """
@@ -23,6 +23,7 @@ class AppShell:
         ("Home", "/"),
         ("Projects", "/projects"),
         ("Resume", "/resume"),
+        ("Ask", "/ask"),
         ("About", "/#about"),
         ("Contact", "/#contact"),
     ]
@@ -84,7 +85,9 @@ class AppShell:
             ],
             className="footer-column wide",
         )
-        site = self.footer_column("Site", [dcc.Link(label, href=href) for label, href in self.NAV_ITEMS[:3]])
+        site = self.footer_column(
+            "Site", [dcc.Link(label, href=href) for label, href in self.NAV_ITEMS if "#" not in href]
+        )
         elsewhere = self.footer_column(
             "Elsewhere",
             [

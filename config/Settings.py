@@ -13,6 +13,8 @@ class Settings:
 
     HEADLINE_RADAR_PATH points at a Headline Radar checkout. By default the app
     looks for a sibling folder named headline-radar next to this repository.
+    CHATBOT_API_URL is the rag-chatbot service behind the Ask page, and
+    CHATBOT_API_KEY its optional key. The key only ever comes from the environment.
     """
 
     headline_radar_folder: Path = field(
@@ -23,6 +25,9 @@ class Settings:
     )
     host: str = field(default_factory=lambda: os.environ.get("HOST", "127.0.0.1"))
     port: int = field(default_factory=lambda: int(os.environ.get("PORT", "8050")))
+    chatbot_api_url: str = field(default_factory=lambda: os.environ.get("CHATBOT_API_URL", "http://127.0.0.1:8070"))
+    chatbot_api_key: str = field(default_factory=lambda: os.environ.get("CHATBOT_API_KEY", ""), repr=False)
+    chatbot_timeout_seconds: float = field(default_factory=lambda: float(os.environ.get("CHATBOT_TIMEOUT", "45")))
     default_branches: int = 6
     branch_choices: tuple[int, ...] = (4, 6, 8, 10, 12)
     random_state: int = 42

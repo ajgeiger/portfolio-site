@@ -1,7 +1,9 @@
 """Small, hand made fixtures so tests never depend on the real 41k article corpus."""
 
+import httpx
 import pandas as pd
 import pytest
+from rag_chatbot_client import ChatbotClient
 from scipy import sparse
 
 from analytics.KeywordNamer import KeywordNamer
@@ -150,3 +152,50 @@ def project(data_source) -> Project:
 @pytest.fixture
 def registry(project) -> ProjectRegistry:
     return ProjectRegistry([project])
+
+
+CHAT_REPLY = {
+    "answer": "He is the Lead Applied AI Scientist at Signature Aviation.",
+    "status": "answered",
+    "citations": [
+        {
+            "number": 1,
+            "chunk_id": "resume-001",
+            "source": "Resume",
+            "section": "Name and current title",
+            "text": "Alexander Geiger. Lead Applied AI Scientist.",
+            "score": 0.03,
+        }
+    ],
+    "sources": ["Resume"],
+    "provider": "fake",
+    "model": "fake",
+    "index_version": "abc",
+    "took_ms": 4.0,
+}
+INFO_REPLY = {"llm_provider": "anthropic", "llm_model": "claude-sonnet-5-5", "demo_mode": False}
+
+
+def make_chatbot_client(handler) -> ChatbotClient:
+    """A chatbot client whose requests go to handler instead of the network."""
+    return ChatbotClient(http=httpx.Client(base_url="http://chatbot.test", transport=httpx.MockTransport(handler)))
+
+
+def answering_handler(request: httpx.Request) -> httpx.Response:
+    if request.url.path == "/chat":
+        return httpx.Response(200, json=CHAT_REPLY)
+    return httpx.Response(200, json=INFO_REPLY)
+
+
+def offline_handler(request: httpx.Request) -> httpx.Response:
+    raise httpx.ConnectError("connection refused")
+
+
+@pytest.fixture
+def chatbot():
+    return make_chatbot_client(answering_handler)
+
+
+@pytest.fixture
+def offline_chatbot():
+    return make_chatbot_client(offline_handler)

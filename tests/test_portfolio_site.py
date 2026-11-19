@@ -7,6 +7,7 @@ import pytest
 from components.AppShell import AppShell
 from config.Profile import Profile
 from config.Resume import Resume
+from pages.AskPage import AskPage
 from pages.HomePage import HomePage
 from pages.ProjectsPage import ProjectsPage
 from pages.ResumePage import ResumePage
@@ -45,20 +46,30 @@ PHONE = re.compile(r"\(?\d{3}\)?[ .]\d{3}[ .]\d{4}")
 
 
 @pytest.fixture
-def site(registry):
-    return PortfolioApp([HomePage(registry), ProjectsPage(registry), ResumePage(), *registry.pages()])
+def site(registry, offline_chatbot):
+    return PortfolioApp(
+        [HomePage(registry), ProjectsPage(registry), ResumePage(), AskPage(offline_chatbot), *registry.pages()]
+    )
 
 
 @pytest.fixture
-def site_text(registry) -> str:
-    pages = [HomePage(registry), ProjectsPage(registry), ResumePage(), *registry.pages()]
+def site_text(registry, chatbot) -> str:
+    ask = AskPage(chatbot)
+    pages = [HomePage(registry), ProjectsPage(registry), ResumePage(), ask, *registry.pages()]
     shell = AppShell()
-    return " ".join([text_of(page.layout()) for page in pages] + [text_of(shell.header()), text_of(shell.footer())])
+    ask_states = [ask.panel.messages(ask.answer("What is his current role?", []))] + [
+        ask.method_note.status(info) for info in (None, {"demo_mode": True}, {"llm_model": "claude-sonnet-5-5"})
+    ]
+    return " ".join(
+        [text_of(page.layout()) for page in pages]
+        + [text_of(state) for state in ask_states]
+        + [text_of(shell.header()), text_of(shell.footer())]
+    )
 
 
 def test_every_route_is_registered(site):
     paths = {page["path"] for page in dash.page_registry.values()}
-    assert {"/", "/projects", "/resume", "/projects/news-topic-explorer"} <= paths
+    assert {"/", "/projects", "/resume", "/ask", "/projects/news-topic-explorer"} <= paths
     assert site.app.title == Profile.SITE_TITLE
 
 
@@ -100,6 +111,13 @@ def test_navigation_marks_the_current_section():
     assert active("/projects") == ["Projects"]
     assert active("/projects/news-topic-explorer") == ["Projects"]
     assert active("/resume") == ["Resume"]
+    assert active("/ask") == ["Ask"]
+
+
+def test_footer_lists_every_page_but_not_anchors():
+    labels = text_of(AppShell().footer())
+    for label in ("Home", "Projects", "Resume", "Ask"):
+        assert label in labels
 
 
 def test_footer_links_to_github_and_kaggle():
