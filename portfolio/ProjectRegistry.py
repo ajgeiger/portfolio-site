@@ -2,8 +2,10 @@
 
 from config.Profile import Profile
 from config.Settings import Settings
+from data.forecast.ForecastCache import ForecastCache
 from data.HeadlineRadarDataSource import HeadlineRadarDataSource
 from pages.AbstractProjectPage import AbstractProjectPage
+from pages.PriceForecastPage import PriceForecastPage
 from pages.TopicExplorerPage import TopicExplorerPage
 from portfolio.Project import Project
 
@@ -52,6 +54,31 @@ class ProjectRegistry:
                 repo_url=Profile.GITHUB_URL,
                 repo_label="Code on GitHub",
                 build_page=lambda project: TopicExplorerPage(project, HeadlineRadarDataSource(settings), settings),
+            ),
+            Project(
+                slug="natural-gas-price-forecast",
+                title="Natural Gas Price Forecast",
+                summary=(
+                    "Can a model beat repeating the last price for natural gas futures, 30 trading days out? "
+                    "Rolling backtests of four models, and a champion and challenger that now forecast every "
+                    "trading morning."
+                ),
+                question="Can a model forecast natural gas futures better than repeating the last price?",
+                data=(
+                    "Public data only: the daily high of the front-month natural gas futures contract (Yahoo "
+                    "Finance NG=F), weather in major gas-demand cities from Open-Meteo, and EIA weekly storage, "
+                    "loaded into SQLite."
+                ),
+                approach=(
+                    "Chronos-2, gradient boosting, Greykite and a naive baseline, backtested on the same rolling "
+                    "dates with no look-ahead and tracked in MLflow. The winner is promoted only when it beats "
+                    "naive by at least 1%. This page reads a snapshot of the results; nothing is retrained here."
+                ),
+                tags=("Forecasting", "Time series", "MLflow", "Plotly Dash"),
+                thumbnail="images/natural-gas-price-forecast.png",
+                repo_url="https://github.com/ajgeiger/natural-gas-forecasting",
+                repo_label="Code on GitHub",
+                build_page=lambda project: PriceForecastPage(project, ForecastCache(settings)),
             ),
         ]
 
