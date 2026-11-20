@@ -217,12 +217,12 @@ flowchart LR
 
 ## Run it
 
-Python 3.11 or newer. Headline Radar's fitted outputs must sit in a sibling folder named `headline-radar`, or set `HEADLINE_RADAR_PATH`.
+Python 3.11 or newer. A fresh clone can run from the committed caches in `cache/`. To rebuild the topic cache, Headline Radar's fitted outputs must sit in a sibling folder named `headline-radar`, or set `HEADLINE_RADAR_PATH`.
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[build,dev]"
-python build_cache.py      # once, or after the topic model is refit
+python build_cache.py      # only after the topic model is refit; a copy is committed
 python build_forecast_cache.py   # refresh the natural gas forecast snapshot (optional, a copy is committed)
 python app.py              # then open http://127.0.0.1:8050
 ```
@@ -244,6 +244,7 @@ Tests use small hand made fixtures, never the real corpus.
 
 ```text
 app.py                  start the portfolio website
+render.yaml             Render Starter web service for the hosted site
 build_cache.py          build the cache from Headline Radar outputs
 build_forecast_cache.py snapshot the natural gas forecast outputs into cache/natgas
 config/                 Settings, Profile, Resume and its entry classes, AskCopy, Theme, Formats, ForecastModels
@@ -276,6 +277,12 @@ model.set_topic_labels(labels)
 * Almost all articles were published on Nov 18, 2026, so the rising view falls back from 7 days to the last 6 hours, and says so on screen.
 * A few topics form around publisher boilerplate (a site name or wire service tagline) rather than a story.
 * The saved model holds two placeholder labels (`Topic 0 (man)`, `Topic 1 (ghana)`) that the pipeline's own outputs do not use, so the explorer starts from keyword names.
+
+## Deploying
+
+The site runs on Render's Starter plan, described in `render.yaml`. The build installs the project, and gunicorn serves `app:server` on the port Render provides. Pages read only the committed caches in `cache/` and `cache/natgas/`, so Headline Radar and the forecasting repository are not needed at runtime.
+
+Connect the GitHub repository to Render, then set `CHATBOT_API_URL` (and `CHATBOT_API_KEY` if the Ask service requires one) in the dashboard. Add `ajgeiger.com` as a custom domain and point its Cloudflare DNS records at the values Render shows. Render issues the certificate once the records are in place.
 
 ## Sources
 
