@@ -10,14 +10,12 @@ from analytics.forecast.PredictionRuns import PredictionRuns
 from analytics.forecast.TournamentResults import TournamentResults
 from components.forecast.BacktestFanChart import BacktestFanChart
 from components.forecast.BacktestScoreTable import BacktestScoreTable
-from components.forecast.ChallengerTrialsTable import ChallengerTrialsTable
 from components.forecast.EventWinners import EventWinners
 from components.forecast.ForecastIds import ForecastIds
 from components.forecast.ForecastPathTable import ForecastPathTable
 from components.forecast.KpiCards import KpiCards
 from components.forecast.ProductionForecastChart import ProductionForecastChart
 from components.forecast.RunDetails import RunDetails
-from components.forecast.RunList import RunList
 from components.forecast.SectionHeading import SectionHeading
 from components.forecast.StandingsTable import StandingsTable
 from config.Settings import Settings
@@ -59,27 +57,44 @@ def cache_factory(tmp_path):
     return build
 
 
+def walk(component):
+    """Every component in a layout tree, depth first."""
+    yield component
+    children = getattr(component, "children", None)
+    for child in children if isinstance(children, (list, tuple)) else [children]:
+        if child is not None and not isinstance(child, (str, int, float)):
+            yield from walk(child)
+
+
+def find_by_id(component, component_id: str):
+    return next((item for item in walk(component) if getattr(item, "id", None) == component_id), None)
+
+
+def find_by_class(component, class_name: str):
+    return next((item for item in walk(component) if class_name in (getattr(item, "className", None) or "")), None)
+
+
 def trace_names(figure) -> list[str]:
     return [trace.name for trace in figure.data if trace.name]
 
 
-def test_fan_chart_draws_band_history_actuals_and_both_models(cache_factory):
+def test_fan_chart_draws_history_actuals_and_both_models_without_a_band(cache_factory):
     cache = cache_factory()
     window = BacktestWindow(cache.backtest(), cache.prices())
-    figure = BacktestFanChart().build(window, pd.Timestamp(AS_OF_DATES[0]), ["chronos", "gradient_boosting"])
+    figure = BacktestFanChart().build(window, pd.Timestamp(AS_OF_DATES[0]), ["chronos", "naive"])
     names = trace_names(figure)
-    assert names[0].startswith("Chronos-2 80% band")
-    assert {"History", "Actual", "Chronos-2", "Gradient boosting"} <= set(names)
+    assert names == ["History", "Actual", "Chronos-2", "Naive"]
+    assert not any(trace.fill for trace in figure.data)
     champion = next(trace for trace in figure.data if trace.name == "Chronos-2")
     assert len(champion.x) == 7  # the last known price, then 6 forecast days
-
-
-def test_fan_chart_leaves_out_the_band_where_there_is_none(cache_factory):
-    cache = cache_factory()
-    window = BacktestWindow(cache.backtest(), cache.prices())
-    figure = BacktestFanChart().build(window, pd.Timestamp(AS_OF_DATES[-1]), ["chronos", "naive"])
-    assert not any("band" in name for name in trace_names(figure))
     assert next(trace for trace in figure.data if trace.name == "Naive").line.dash == "dot"
+
+
+def test_fan_stats_show_only_each_model_mae(cache_factory):
+    page = PriceForecastPage(make_forecast_project(), cache_factory())
+    text = text_of(page.fan_stats(pd.Timestamp(AS_OF_DATES[0]), ["chronos", "naive"]))
+    assert "MAE 0.100" in text and "MAE 0.300" in text
+    assert "band" not in text.lower()
 
 
 def tournament_of(cache: ForecastCache) -> TournamentResults:
@@ -102,30 +117,33 @@ def test_standings_table_switches_bucket_and_marks_the_winner(cache_factory):
     assert "No standings" in text_of(StandingsTable().build(results.standings("days 99")))
 
 
-def test_event_winners_and_trials_summarize_the_round(cache_factory):
+def test_event_winners_show_each_winner_and_its_margin_over_naive(cache_factory):
     results = tournament_of(cache_factory())
     events = text_of(EventWinners().build(results.events()))
-    for expected in ("Days 1 to 5", "Naive v1", "No champion beat naive by 1%", "Gradient boosting v1", "Chronos-2 v1"):
-        assert expected in events
-    assert "4.76% better than naive" in events
-    trials = text_of(ChallengerTrialsTable().build(results.trials()))
-    assert "12 of 60 days" in trials and "In trials" in trials
-    assert "No challengers" in text_of(ChallengerTrialsTable().build(results.trials().iloc[0:0]))
-
-
-def test_kpi_cards_show_each_event_result(cache_factory):
-    page = PriceForecastPage(make_forecast_project(), cache_factory())
-    text = text_of(KpiCards().build(page.summary, page.tournament.events()))
     for expected in (
-        "Best 30 day MAE",
-        "0.1000",
         "Days 1 to 5",
         "Naive v1",
-        "+4.76%",
-        "+7.69%",
-        "Latest production run",
+        "Baseline",
+        "No champion beat naive by 1%",
+        "Days 6 to 15",
+        "Gradient boosting v1",
+        "Champion \u00b7 blended MAE 0.4000",
+        "Naive 0.4200 \u00b7 4.76% better",
+        "Chronos-2 v1",
     ):
+        assert expected in events
+    assert "No tournament results" in text_of(EventWinners().build(results.events().iloc[0:0]))
+
+
+def test_kpi_cards_focus_on_mape_wape_mae_and_bias(cache_factory):
+    page = PriceForecastPage(make_forecast_project(), cache_factory())
+    cards = KpiCards().build(page.summary).children
+    assert [text_of(card.children[0]) for card in cards] == ["MAPE", "WAPE", "MAE", "Bias"]
+    text = text_of(KpiCards().build(page.summary))
+    for expected in ("0.1000", "naive 0.3000", "66.67% lower", "+0.1000", "forecast minus actual", "naive +0.3000"):
         assert expected in text
+    for removed in ("Days 1 to 5", "coverage", "band", "Latest production run"):
+        assert removed not in text
 
 
 def test_production_chart_draws_one_segment_per_event_and_optional_champions(cache_factory):
@@ -134,14 +152,12 @@ def test_production_chart_draws_one_segment_per_event_and_optional_champions(cac
     history = BacktestWindow(cache.backtest(), cache.prices()).history(run["as_of_date"].max(), 20)
     names = trace_names(ProductionForecastChart().build(history, run))
     assert names == [
-        "80% band",
         "History",
         "Naive, days 1 to 5",
         "Gradient boosting, days 6 to 15",
         "Chronos-2, days 16 to 20",
     ]
-    band = next(trace for trace in ProductionForecastChart().build(history, run).data if trace.name == "80% band")
-    assert len(band.x) == 5
+    assert not any(trace.fill for trace in ProductionForecastChart().build(history, run).data)
     compared = trace_names(ProductionForecastChart().build(history, run, ["greykite:champion", "baseline:naive"]))
     assert "Greykite champion path" in compared and "Naive baseline path" in compared
 
@@ -153,16 +169,14 @@ def test_charts_fall_back_to_a_note_when_empty(cache_factory):
     assert BacktestFanChart().build(window, pd.Timestamp(AS_OF_DATES[0]), ["chronos"]).layout.annotations
 
 
-def test_run_list_has_one_clickable_row_per_published_run(cache_factory):
-    cache = cache_factory()
-    runs = PredictionRuns(cache.predictions()).runs()
-    listing = RunList().build(runs, cache.predictions(), "run1")
-    header, row = listing.children
-    assert row.id == {"type": ForecastIds.RUN_ROW, "run": "run1"}
-    assert row.className == RunList.SELECTED_CLASS
-    assert "3.510" in text_of(row) and "3.600" in text_of(row)
-    assert RunList.class_name(False) == RunList.ROW_CLASS
-    assert "No production runs" in text_of(RunList().build(runs.iloc[0:0], cache.predictions(), None))
+def test_run_selector_defaults_to_the_newest_run(cache_factory):
+    page = PriceForecastPage(make_forecast_project(), cache_factory())
+    layout = page.layout()
+    selector = find_by_id(layout, ForecastIds.RUN_SELECTOR)
+    assert selector.value == "run1"
+    assert selector.clearable is False and selector.searchable is False
+    assert selector.options == [{"label": "Mar 15, 2024 (run run1 \u00b7 5 contenders)", "value": "run1"}]
+    assert "Scoring run" in text_of(layout)
 
 
 def test_run_details_and_path_table_describe_the_run(cache_factory):
@@ -171,8 +185,9 @@ def test_run_details_and_path_table_describe_the_run(cache_factory):
     for expected in ("run1", "Mar 15, 2024", "20 trading days", "Days 6 to 15", "Gradient boosting v1", "Chronos-2 v1"):
         assert expected in details
     table = text_of(ForecastPathTable().build(PredictionRuns(cache.predictions()).production("run1")))
-    for expected in ("Day 1", "Day 6", "Day 10", "Day 16", "Naive v1", "3.300 to 3.700"):
+    for expected in ("Day 1", "Day 6", "Day 10", "Day 16", "Naive v1", "3.660"):
         assert expected in table
+    assert "3.300" not in table and "3.700" not in table
     assert "Day 30" not in table
 
 
@@ -196,7 +211,7 @@ def test_backtest_scores_mark_the_best_value_and_compare_with_naive(cache_factor
 def test_page_order_and_copy(cache_factory):
     page = PriceForecastPage(make_forecast_project(), cache_factory())
     text = text_of(page.layout())
-    titles = ["Model leaderboard", "Challenger trials", "Active predictions in production", "Model selection backtests"]
+    titles = ["Model leaderboard", "Model scoreboard", "Active predictions in production", "Model selection backtests"]
     positions = [text.index(title) for title in titles]
     assert positions == sorted(positions)
     assert "View production forecast" in text
@@ -206,6 +221,11 @@ def test_page_order_and_copy(cache_factory):
         "Error by day ahead",
         "Staged predictions",
         "Staging",
+        "Challenger trials",
+        "Scoring runs",
+        "80% band",
+        "Inside the band",
+        "Interval coverage",
         "How it runs",
         "Caveats",
         "pending",
@@ -219,14 +239,30 @@ def test_page_order_and_copy(cache_factory):
     page.register_callbacks(Dash(__name__))
 
 
-def test_clicking_a_run_selects_it(cache_factory):
+def test_run_view_updates_for_the_selected_run(cache_factory):
     page = PriceForecastPage(make_forecast_project(), cache_factory())
-    assert page.clicked_run({"type": ForecastIds.RUN_ROW, "run": "run9"}, "run1") == "run9"
-    assert page.clicked_run(None, "run1") == "run1"
     chart, table, details = page.run_view("run1", ["chronos:champion"])
     assert "Chronos-2 champion path" in trace_names(chart)
     assert "run1" in text_of(details)
     assert "Day 16" in text_of(table)
+
+
+def test_scoreboard_is_collapsible_and_closed_by_default(cache_factory):
+    page = PriceForecastPage(make_forecast_project(), cache_factory())
+    details = find_by_class(page.layout(), "scoreboard-details")
+    assert details.open is False
+    summary = details.children[0]
+    assert "Model scoreboard" in text_of(summary)
+    assert "5 contenders \u00b7 click to expand" in text_of(summary)
+    buckets = find_by_id(details, ForecastIds.LEADERBOARD_BUCKET)
+    assert [option["label"] for option in buckets.options] == [
+        "Days 1 to 5",
+        "Days 6 to 15",
+        "Days 16 to 30",
+        "All days",
+    ]
+    assert buckets.value == PriceForecastPage.DEFAULT_BUCKET
+    assert find_by_id(details, ForecastIds.LEADERBOARD_TABLE) is not None
 
 
 def test_page_highlights_and_findings_are_read_from_the_data(cache_factory):
@@ -238,7 +274,8 @@ def test_page_highlights_and_findings_are_read_from_the_data(cache_factory):
     assert findings.startswith("Chronos-2, gradient boosting and Greykite compete")
     assert "naive holds days 1 to 5" in findings
     assert "gradient boosting wins days 6 to 15 (4.76% better than naive)" in findings
-    assert "challengers are at days 0 to 12" in findings
+    assert len(page.key_findings()) == 3
+    assert "band" not in findings and "challenger" not in findings
 
 
 def test_page_without_tournament_tables_still_renders(tmp_path):
@@ -247,7 +284,7 @@ def test_page_without_tournament_tables_still_renders(tmp_path):
     ForecastSnapshotBuilder(settings).build()
     page = PriceForecastPage(make_forecast_project(), ForecastCache(settings))
     text = text_of(page.layout())
-    assert "No tournament results yet" in text and "No challengers in trials" in text
+    assert "No tournament results yet" in text and "No standings" not in text
     page.register_callbacks(Dash(__name__))
 
 

@@ -10,7 +10,7 @@ from config.Theme import Theme
 
 
 class BacktestFanChart(AbstractForecastFigure):
-    """Price history up to the as-of date, then the champion with its band, a second model and the actuals."""
+    """Price history up to the as-of date, then the champion, a second model and the actuals."""
 
     HEIGHT = 400
 
@@ -21,18 +21,6 @@ class BacktestFanChart(AbstractForecastFigure):
             return self.empty("No backtest data for this date.")
 
         figure = go.Figure()
-        for model in models:
-            forecast = window.forecast(as_of, model)
-            if model == ForecastModels.CHAMPION and forecast["lower"].notna().any():
-                figure.add_traces(
-                    self.band(
-                        forecast["target_date"],
-                        forecast["lower"],
-                        forecast["upper"],
-                        "Chronos-2 80% band (P10 to P90)",
-                        ForecastModels.BAND_FILL,
-                    )
-                )
         figure.add_trace(
             go.Scatter(
                 x=history["date"],

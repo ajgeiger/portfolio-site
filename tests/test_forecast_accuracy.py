@@ -58,12 +58,6 @@ def test_leaderboard_has_every_bucket_and_an_all_days_row():
     assert board[board["horizon_bucket"] == "all days"].set_index("model")["bias"]["naive"] == pytest.approx(0.30)
 
 
-def test_coverage_counts_only_rows_with_a_band():
-    backtest = typed(make_backtest())
-    coverage = ForecastAccuracy.coverage(backtest[backtest["model"] == "chronos"])
-    assert coverage == {"share": 0.5, "rows": 12, "as_of_dates": 2}
-
-
 def test_improvement_is_positive_when_lower_than_baseline():
     assert ForecastAccuracy.improvement(0.5192, 0.5259) == pytest.approx(0.01274, abs=1e-5)
     assert ForecastAccuracy.improvement(1.0, 0.0) == 0.0
@@ -74,8 +68,11 @@ def test_summary_reads_champion_baseline_and_latest_run():
     assert summary.champion_mae == pytest.approx(0.10)
     assert summary.baseline_mae == pytest.approx(0.30)
     assert summary.improvement == pytest.approx(2 / 3)
-    assert summary.coverage == 0.5
-    assert summary.coverage_dates == 2
+    assert summary.champion_bias == pytest.approx(0.10)
+    assert summary.baseline_bias == pytest.approx(0.30)
+    assert summary.champion_mape < summary.baseline_mape
+    assert summary.champion_wape < summary.baseline_wape
+    assert not hasattr(summary, "coverage")
     assert summary.as_of_dates == 3
     assert summary.horizon_days == 6
     assert summary.latest_run_as_of == pd.Timestamp("2024-03-15")
@@ -85,8 +82,8 @@ def test_summary_reads_champion_baseline_and_latest_run():
 
 def test_backtest_window_slices_one_date():
     window = BacktestWindow(typed(make_backtest()), typed(make_prices()))
+    assert window.default_as_of() == pd.Timestamp(AS_OF_DATES[-1])
     as_of = pd.Timestamp(AS_OF_DATES[1])
-    assert window.default_as_of() == as_of
     assert window.history(as_of, 10)["date"].max() == as_of
     assert len(window.history(as_of, 10)) == 10
     assert len(window.forecast(as_of, "chronos")) == 6

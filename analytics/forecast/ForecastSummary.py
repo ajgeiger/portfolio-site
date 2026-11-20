@@ -11,7 +11,7 @@ from config.ForecastModels import ForecastModels
 
 @dataclass(frozen=True)
 class ForecastSummary:
-    """Champion against baseline, interval coverage, backtest size and the latest live run."""
+    """Champion against baseline on MAE, MAPE, WAPE and bias, the backtest size and the latest live run."""
 
     champion_mae: float
     baseline_mae: float
@@ -20,8 +20,8 @@ class ForecastSummary:
     baseline_mape: float
     champion_wape: float
     baseline_wape: float
-    coverage: float
-    coverage_dates: int
+    champion_bias: float
+    baseline_bias: float
     as_of_dates: int
     first_as_of: pd.Timestamp | None
     last_as_of: pd.Timestamp | None
@@ -38,8 +38,6 @@ class ForecastSummary:
         def score(model: str, measure: str) -> float:
             return float(scores.loc[model, measure]) if scores is not None and model in scores.index else float("nan")
 
-        champion = backtest[backtest["model"] == ForecastModels.CHAMPION]
-        coverage = ForecastAccuracy.coverage(champion)
         runs = PredictionRuns(predictions).runs()
         latest = runs.iloc[0] if len(runs) else None
         return cls(
@@ -52,8 +50,8 @@ class ForecastSummary:
             baseline_mape=score(ForecastModels.BASELINE, "mape"),
             champion_wape=score(ForecastModels.CHAMPION, "wape"),
             baseline_wape=score(ForecastModels.BASELINE, "wape"),
-            coverage=coverage["share"],
-            coverage_dates=coverage["as_of_dates"],
+            champion_bias=score(ForecastModels.CHAMPION, "bias"),
+            baseline_bias=score(ForecastModels.BASELINE, "bias"),
             as_of_dates=int(backtest["as_of_date"].nunique()),
             first_as_of=backtest["as_of_date"].min() if len(backtest) else None,
             last_as_of=backtest["as_of_date"].max() if len(backtest) else None,

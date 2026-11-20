@@ -32,7 +32,6 @@ class ForecastModels:
         "greykite": Theme.AMBER,
     }
 
-    BAND_FILL = "rgba(31, 94, 255, 0.12)"
     ACTUAL_COLOR = Theme.NAVY
 
     @classmethod

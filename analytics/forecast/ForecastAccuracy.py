@@ -65,14 +65,3 @@ class ForecastAccuracy:
     def improvement(score: float, baseline: float) -> float:
         """Share by which a score beats the baseline, positive when lower is better."""
         return 1 - score / baseline if baseline else 0.0
-
-    @staticmethod
-    def coverage(frame: pd.DataFrame) -> dict:
-        """How often the actual fell inside the interval, over rows that have one."""
-        with_band = frame.dropna(subset=["lower", "upper"])
-        inside = (with_band["actual"] >= with_band["lower"]) & (with_band["actual"] <= with_band["upper"])
-        return {
-            "share": float(inside.mean()) if len(with_band) else float("nan"),
-            "rows": int(len(with_band)),
-            "as_of_dates": int(with_band["as_of_date"].nunique()) if len(with_band) else 0,
-        }

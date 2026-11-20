@@ -15,7 +15,7 @@ A personal portfolio website built in Plotly Dash. It covers my background and r
 | `/resume` | Resume | The full resume as a web document, section by section and word for word, with the PDF download. It prints cleanly. |
 | `/ask` | Ask | Questions about my projects and experience, answered from my resume and project READMEs, with numbered citations, source chips, suggested questions and a short note on the method. |
 | `/projects/news-topic-explorer` | News Topic Explorer | A short case study (question, data, approach, key findings) above the live explorer. |
-| `/projects/natural-gas-price-forecast` | Natural Gas Price Forecast | The case study and headline numbers, then the tournament leaderboard and challenger trials, the active predictions in production and the model selection backtests. |
+| `/projects/natural-gas-price-forecast` | Natural Gas Price Forecast | The case study and headline numbers, then the tournament leaderboard with event winners and a collapsible model scoreboard, the active predictions in production and the model selection backtests. |
 
 Every page shares a sticky header (Home, Projects, Resume, Ask, About, Contact), a footer with GitHub and Kaggle links, and a layout that adapts down to phone width. Numbers on the home and projects pages are computed from each project's data when the site starts, so they never drift from the app.
 
@@ -124,10 +124,10 @@ The forecasting repository runs a daily tournament. Each model family (Chronos-2
 
 | Section | What it shows |
 | --- | --- |
-| Top of the page | The question, data and approach, key findings, and cards for the best 30 day backtest MAE, the result of each event, 80% band coverage and the latest production run. |
-| Model leaderboard | The winner of each event, then the standings for the selected horizon (days 1 to 5, 6 to 15, 16 to 30 or all days): rank, model and role, blended MAE, backtest MAE, production MAE and weight, change against naive and a status (winner, qualified, below the 1% bar, in trials, baseline). Below it, each family's challenger trial: versions, days done out of 60 and both MAEs. |
-| Active predictions in production | Every published scoring run as a clickable row with its production forecast at days 1, 10 and 30. Selecting one shows the stitched production path, colored by the event winner behind each segment, with the 80% band where Chronos-2 produced it. The family champions and the naive baseline can be added as dotted lines. The run details name each event winner, and the forecast path table gives days 1, 6, 10, 16 and 30. |
-| Model selection backtests | The rolling-origin backtests used to train and tune each family, which seed every blended score. A slider over all 125 as-of dates shows the price history, the Chronos-2 forecast with its band, a second model of your choice and the actuals, with each model's MAE for that date. Below it, MAE, RMSE, MAPE, WAPE and bias per family over all 30 days. |
+| Top of the page | The question, data and approach, three key findings, and four cards for the best model over all 30 backtest days: MAPE, WAPE, MAE and bias, each against naive. |
+| Model leaderboard | One card per event with the winning model, its role, its blended MAE and its margin over naive. Below them, a collapsible model scoreboard, closed by default. Opened, it shows the standings for the selected horizon (days 1 to 5, 6 to 15, 16 to 30 or all days): rank, model and role, blended MAE, backtest MAE, production MAE and weight, change against naive and a status (winner, qualified, below the 1% bar, in trials, baseline). |
+| Active predictions in production | A scoring run dropdown, newest run first and selected by default. The chart shows the stitched production path for that run, colored by the event winner behind each segment. The family champions and the naive baseline can be added as dotted lines. The run details name each event winner, and the forecast path table gives days 1, 6, 10, 16 and 30. |
+| Model selection backtests | The rolling-origin backtests used to train and tune each family, which seed every blended score. A slider over all 125 as-of dates shows the price history, the Chronos-2 forecast, a second model of your choice and the actuals, with each model's MAE for that date. Below it, MAE, RMSE, MAPE, WAPE and bias per family over all 30 days. |
 
 ![Case study header and headline numbers](docs/images/natgas-summary.png)
 
@@ -149,12 +149,6 @@ Tournament as of Nov 18, 2026. No forecast has matured in production yet, so eve
 | Days 6 to 15 | Gradient boosting v1 | 0.4594 | 0.4656 | 1.34% |
 | Days 16 to 30 | Chronos-2 v1 | 0.6459 | 0.6589 | 1.98% |
 
-| Family | Champion | Challenger | Trial | Champion MAE | Challenger MAE |
-| --- | --- | --- | --- | --- | --- |
-| Chronos-2 | v1 | v2 | 0 of 60 days | 0.5192 | 0.5225 |
-| Gradient boosting | v1 | v2 | 0 of 60 days | 0.5212 | 0.5236 |
-| Greykite | v1 | v2 | 0 of 60 days | 0.7362 | 0.7479 |
-
 Backtests over all 30 days, best configuration per family:
 
 | Model | MAE | RMSE | MAPE | WAPE | Bias | MAE vs naive |
@@ -164,7 +158,7 @@ Backtests over all 30 days, best configuration per family:
 | Naive | 0.5259 | 0.8107 | 13.50% | 13.82% | +0.0037 | baseline |
 | Greykite | 0.7362 | 1.0741 | 19.36% | 19.35% | +0.0030 | 39.98% worse |
 
-Actuals fell inside the Chronos-2 80% band 72.9% of the time over the 124 as-of dates that have a band (Oct 2, 2026 has none). The latest production run is as of Nov 18, 2026: 3.418 on day 1 (naive), 3.576 on day 10 (gradient boosting) and 3.732 on day 30 (Chronos-2, band 2.969 to 4.874).
+The latest production run is as of Nov 18, 2026: 3.418 on day 1 (naive), 3.576 on day 10 (gradient boosting) and 3.732 on day 30 (Chronos-2).
 
 ### The snapshot
 

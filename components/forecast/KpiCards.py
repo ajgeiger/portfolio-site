@@ -1,6 +1,5 @@
-"""The headline numbers at the top of the forecast page."""
+"""The headline error measures at the top of the forecast page."""
 
-import pandas as pd
 from dash import html
 
 from analytics.forecast.ForecastSummary import ForecastSummary
@@ -9,49 +8,38 @@ from config.Formats import Formats
 
 
 class KpiCards:
-    """Six cards: the best 30 day backtest error, each event result, interval coverage and the latest run."""
+    """Four cards for the best model over all 30 backtest days: MAPE, WAPE, MAE and bias, each against naive."""
 
-    TONES = {"chronos": "accent", "gradient_boosting": "teal", "greykite": "amber"}
-
-    def build(self, summary: ForecastSummary, events: pd.DataFrame) -> html.Div:
+    def build(self, summary: ForecastSummary) -> html.Div:
+        champion = ForecastModels.name(ForecastModels.CHAMPION)
         cards = [
             (
-                "Best 30 day MAE",
-                Formats.decimal(summary.champion_mae),
-                f"{ForecastModels.name(ForecastModels.CHAMPION)} \u00b7 naive {Formats.decimal(summary.baseline_mae)} "
-                f"\u00b7 {Formats.percent(summary.improvement, 2)} lower",
+                "MAPE",
+                Formats.percent(summary.champion_mape / 100, 2),
+                f"{champion} \u00b7 naive {Formats.percent(summary.baseline_mape / 100, 2)}",
                 "accent",
             ),
-            *[self.event_card(event) for event in events.itertuples()],
             (
-                "Interval coverage",
-                Formats.percent(summary.coverage),
-                f"Backtest actuals inside the 80% band \u00b7 {Formats.count(summary.coverage_dates)} dates",
+                "WAPE",
+                Formats.percent(summary.champion_wape / 100, 2),
+                f"{champion} \u00b7 naive {Formats.percent(summary.baseline_wape / 100, 2)}",
+                "teal",
+            ),
+            (
+                "MAE",
+                Formats.decimal(summary.champion_mae),
+                f"{champion} \u00b7 naive {Formats.decimal(summary.baseline_mae)} \u00b7 "
+                f"{Formats.percent(summary.improvement, 2)} lower",
                 "amber",
             ),
             (
-                "Latest production run",
-                Formats.date(summary.latest_run_as_of) if summary.latest_run_as_of is not None else "None yet",
-                self.run_detail(summary),
+                "Bias",
+                Formats.signed(summary.champion_bias),
+                f"{champion} \u00b7 forecast minus actual \u00b7 naive {Formats.signed(summary.baseline_bias)}",
                 "navy",
             ),
         ]
         return html.Div([self.card(*card) for card in cards], className="kpi-cards")
-
-    @staticmethod
-    def event_card(event) -> tuple[str, str, str, str]:
-        winner = f"{ForecastModels.name(event.model)} v{event.model_version}"
-        title = f"Days {int(event.first_day)} to {int(event.last_day)}"
-        if event.improvement > 0:
-            tone = KpiCards.TONES.get(event.model, "muted")
-            return title, f"+{Formats.percent(event.improvement, 2)}", f"{winner} against naive", tone
-        return title, winner, "No champion beat naive by 1%", "muted"
-
-    @staticmethod
-    def run_detail(summary: ForecastSummary) -> str:
-        if summary.latest_run_time is None:
-            return "Waiting for the first scoring run"
-        return f"As-of date \u00b7 scored {Formats.date_time(summary.latest_run_time)}"
 
     @staticmethod
     def card(title: str, value: str, detail: str, tone: str) -> html.Div:

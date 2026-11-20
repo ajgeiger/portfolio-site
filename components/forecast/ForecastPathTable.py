@@ -8,7 +8,7 @@ from config.Formats import Formats
 
 
 class ForecastPathTable:
-    """The first day of each event, day 10 and the last day, with the forecast and its band under it."""
+    """The first day of each event, day 10 and the last day, with the model and its forecast."""
 
     DAYS = (1, 6, 10, 16, 30)
 
@@ -30,10 +30,6 @@ class ForecastPathTable:
 
     @staticmethod
     def row(day: int, row: pd.Series) -> html.Tr:
-        forecast = [html.Div(Formats.decimal(row["forecast"], 3))]
-        if pd.notna(row["lower"]):
-            band = f"{Formats.decimal(row['lower'], 3)} to {Formats.decimal(row['upper'], 3)}"
-            forecast.append(html.Div(band, className="cell-note"))
         return html.Tr(
             [
                 html.Td(
@@ -47,6 +43,6 @@ class ForecastPathTable:
                     ],
                     className="path-model",
                 ),
-                html.Td(forecast, className="number strong"),
+                html.Td(Formats.decimal(row["forecast"], 3), className="number strong"),
             ]
         )

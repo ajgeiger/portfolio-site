@@ -12,8 +12,7 @@ from config.Theme import Theme
 class ProductionForecastChart(AbstractForecastFigure):
     """Recent history, then the stitched production path colored by the event winner behind each segment.
 
-    The 80% band is shaded where the winning model has one. Family champions can be
-    drawn as thin dotted lines for comparison.
+    Family champions can be drawn as thin dotted lines for comparison.
     """
 
     HEIGHT = 580
@@ -24,11 +23,6 @@ class ProductionForecastChart(AbstractForecastFigure):
         if production.empty:
             return self.empty("No production runs yet.")
         figure = go.Figure()
-        banded = production[production["lower"].notna()]
-        if len(banded):
-            figure.add_traces(
-                self.band(banded["target_date"], banded["lower"], banded["upper"], "80% band", ForecastModels.BAND_FILL)
-            )
         figure.add_trace(
             go.Scatter(
                 x=history["date"],

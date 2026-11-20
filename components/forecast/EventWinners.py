@@ -8,7 +8,7 @@ from config.Formats import Formats
 
 
 class EventWinners:
-    """One small card per event: its days, the winning model and how it compares with naive."""
+    """One card per event: its days, the winning model and role, its blended MAE and the margin over naive."""
 
     def build(self, events: pd.DataFrame) -> html.Div:
         if events.empty:
@@ -19,7 +19,9 @@ class EventWinners:
     def card(event) -> html.Div:
         family, role = ForecastModels.stage_parts(event.stage)
         if event.improvement > 0:
-            versus = f"{Formats.percent(event.improvement, 2)} better than naive"
+            versus = (
+                f"Naive {Formats.decimal(event.baseline_mae)} \u00b7 {Formats.percent(event.improvement, 2)} better"
+            )
         else:
             versus = "No champion beat naive by 1%"
         return html.Div(
