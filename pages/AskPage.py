@@ -3,6 +3,7 @@
 from dash import ALL, Dash, Input, Output, State, ctx, html, no_update
 from rag_chatbot_client import ChatbotClient, ChatbotError
 
+from components.AskHistory import AskHistory
 from components.AskIds import AskIds
 from components.AskMethodNote import AskMethodNote
 from components.AskPanel import AskPanel
@@ -23,12 +24,11 @@ class AskPage(AbstractPage):
     title = "Ask"
     description = "Ask questions about Alexander J. Geiger's projects and experience."
 
-    HISTORY_TURNS = 6
-
     def __init__(self, client: ChatbotClient):
         self.client = client
         self.panel = AskPanel()
         self.method_note = AskMethodNote()
+        self.history = AskHistory()
 
     def layout(self):
         heading = html.Div(
@@ -45,11 +45,8 @@ class AskPage(AbstractPage):
     def answer(self, question: str, history: list[dict]) -> list[dict]:
         """Ask the service and return the history with both new turns added."""
         question = " ".join(question.split())
-        recent = [
-            {"role": item["role"], "content": item["content"]} for item in history if item.get("status") != "outage"
-        ]
         try:
-            response = self.client.chat(question, recent[-self.HISTORY_TURNS :])
+            response = self.client.chat(question, self.history.for_request(history))
             reply = {"role": "assistant", "content": response.answer, "status": response.status}
         except ChatbotError:
             reply = {"role": "assistant", "content": AskCopy.OUTAGE, "status": "outage"}
