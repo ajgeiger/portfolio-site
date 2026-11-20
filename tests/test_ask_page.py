@@ -1,4 +1,4 @@
-"""The Ask page against a stub chatbot service: answers, citations, outage state and wiring."""
+"""The Ask page against a stub chatbot service: answers, outage state and wiring."""
 
 from dash import Dash
 
@@ -28,27 +28,22 @@ def test_ask_is_in_the_navigation():
     assert ("Ask", "/ask") in AppShell.NAV_ITEMS
 
 
-def test_answer_adds_both_turns_with_citations_and_sources(chatbot):
+def test_answer_adds_both_turns(chatbot):
     history = AskPage(chatbot).answer("  What is his   current role? ", [])
     assert [item["role"] for item in history] == ["user", "assistant"]
     assert history[0]["content"] == "What is his current role?"
     reply = history[1]
     assert reply["status"] == "answered"
-    assert reply["sources"] == ["Resume"]
-    assert reply["citations"][0] == {
-        "number": 1,
-        "source": "Resume",
-        "section": "Name and current title",
-        "text": "Alexander Geiger. Lead Applied AI Scientist.",
-    }
+    assert "Lead Applied AI Scientist" in reply["content"]
+    assert "sources" not in reply and "citations" not in reply
 
 
-def test_rendered_answer_shows_chips_and_numbered_citations(chatbot):
+def test_rendered_answer_hides_sources_and_citations(chatbot):
     page = AskPage(chatbot)
     text = text_of(page.panel.messages(page.answer("What is his current role?", [])))
     assert "Lead Applied AI Scientist at Signature Aviation" in text
-    assert AskCopy.SOURCES_TITLE in text and AskCopy.CITATIONS_TITLE in text
-    assert "Name and current title" in text
+    assert "Citations" not in text and "Sources" not in text
+    assert "Name and current title" not in text
 
 
 def test_history_is_sent_without_outage_turns():

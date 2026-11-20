@@ -13,7 +13,7 @@ A personal portfolio website built in Plotly Dash. It covers my background and r
 | `/` | Home | Short introduction, background (Lead Applied AI Scientist at Signature Aviation, the enterprise AI platform, Syracuse University), featured projects with numbers read from their data, how I work, about and contact links. |
 | `/projects` | Projects | One card per registered project: screenshot, summary, tags, headline numbers, a link to the live page and to the code. |
 | `/resume` | Resume | The full resume as a web document, section by section and word for word, with the PDF download. It prints cleanly. |
-| `/ask` | Ask | Questions about my projects and experience, answered from my resume and project READMEs, with numbered citations, source chips, suggested questions and a short note on the method. |
+| `/ask` | Ask | Questions about my projects and experience, answered from my resume and project READMEs, with suggested questions and a short note on the method. |
 | `/projects/news-topic-explorer` | News Topic Explorer | A short case study (question, data, approach, key findings) above the live explorer. |
 | `/projects/natural-gas-price-forecast` | Natural Gas Price Forecast | The case study and headline error measures, then the active predictions in production, the tournament leaderboard with event winners and a collapsible model scoreboard, and the model selection backtests. |
 

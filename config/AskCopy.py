@@ -6,15 +6,10 @@ class AskCopy:
 
     EYEBROW = "ASK"
     TITLE = "Ask about my projects and experience"
-    LEAD = (
-        "Answers come only from my resume and project write ups, with the passages they rely on listed "
-        "under each answer. If something is not covered, the answer says so."
-    )
+    LEAD = "Answers come only from my resume and project write ups. If something is not covered, the answer says so."
     PLACEHOLDER = "Ask a question about my projects or experience"
     SEND_LABEL = "Ask"
     SUGGESTED_TITLE = "Suggested questions"
-    CITATIONS_TITLE = "Citations"
-    SOURCES_TITLE = "Sources"
     WELCOME = (
         "Hello. I answer questions about Alex Geiger's projects and professional experience, "
         "using his resume and project documentation."
@@ -33,7 +28,7 @@ class AskCopy:
         "The resume and project pages cover the same material."
     )
     STATUS_ONLINE = "Online"
-    STATUS_RETRIEVAL = "Online, retrieval only"
+    STATUS_RETRIEVAL = "Online, answers limited"
     STATUS_OFFLINE = "Offline"
     MODEL_LINE = "Answers are written by {model}."
     RETRIEVAL_LINE = "No language model is connected, so answers quote the closest passages."
@@ -43,7 +38,7 @@ class AskCopy:
     METHOD_STEPS = (
         "Your question is matched against short passages from my resume and project READMEs, "
         "using keyword search and semantic search together.",
-        "A language model writes a brief answer from the best passages only and cites them by number.",
+        "A language model writes a brief answer from the best passages only.",
         "Questions with no matching passage get a plain not covered reply instead of a guess.",
         "It does not discuss job plans or pay, and never shares a phone number or email address.",
     )

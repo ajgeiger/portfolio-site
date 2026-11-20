@@ -50,16 +50,7 @@ class AskPage(AbstractPage):
         ]
         try:
             response = self.client.chat(question, recent[-self.HISTORY_TURNS :])
-            reply = {
-                "role": "assistant",
-                "content": response.answer,
-                "status": response.status,
-                "sources": list(response.sources),
-                "citations": [
-                    {"number": item.number, "source": item.source, "section": item.section, "text": item.text}
-                    for item in response.citations
-                ],
-            }
+            reply = {"role": "assistant", "content": response.answer, "status": response.status}
         except ChatbotError:
             reply = {"role": "assistant", "content": AskCopy.OUTAGE, "status": "outage"}
         return [*history, {"role": "user", "content": question}, reply]
