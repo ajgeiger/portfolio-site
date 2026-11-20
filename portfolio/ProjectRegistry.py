@@ -59,20 +59,23 @@ class ProjectRegistry:
                 slug="natural-gas-price-forecast",
                 title="Natural Gas Price Forecast",
                 summary=(
-                    "Can a model beat repeating the last price for natural gas futures, 30 trading days out? "
-                    "Rolling backtests of four models, and a champion and challenger that now forecast every "
-                    "trading morning."
+                    "A natural gas futures forecast in production, published each trading morning by a model "
+                    "tournament: Chronos-2, gradient boosting and Greykite compete with a naive baseline over three "
+                    "horizons."
                 ),
-                question="Can a model forecast natural gas futures better than repeating the last price?",
+                question=(
+                    "How do forecasting models compete, qualify and serve daily natural gas predictions in production?"
+                ),
                 data=(
                     "Public data only: the daily high of the front-month natural gas futures contract (Yahoo "
                     "Finance NG=F), weather in major gas-demand cities from Open-Meteo, and EIA weekly storage, "
                     "loaded into SQLite."
                 ),
                 approach=(
-                    "Chronos-2, gradient boosting, Greykite and a naive baseline, backtested on the same rolling "
-                    "dates with no look-ahead and tracked in MLflow. The winner is promoted only when it beats "
-                    "naive by at least 1%. This page reads a snapshot of the results; nothing is retrained here."
+                    "Each model family is trained and tuned in rolling backtests with no look-ahead, then registered "
+                    "in MLflow as a champion and a challenger. Every trading morning the champions compete in three "
+                    "horizon events, the event winners are stitched into one production forecast, and every model is "
+                    "evaluated with MAE, MAPE, WAPE and bias."
                 ),
                 tags=("Forecasting", "Time series", "MLflow", "Plotly Dash"),
                 thumbnail="images/natural-gas-price-forecast.png",

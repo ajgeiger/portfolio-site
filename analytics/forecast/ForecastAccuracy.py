@@ -61,23 +61,15 @@ class ForecastAccuracy:
         table["horizon_bucket"] = pd.Categorical(table["horizon_bucket"], cls.BUCKET_ORDER, ordered=True)
         return table.sort_values(["model", "horizon_bucket"]).reset_index(drop=True)
 
-    @classmethod
-    def by_horizon_day(cls, frame: pd.DataFrame) -> pd.DataFrame:
-        """MAE for each model at each horizon day."""
-        return cls.scores(frame, ["model", "horizon_day"]).sort_values(["model", "horizon_day"]).reset_index(drop=True)
+    @staticmethod
+    def bucket_scores(leaderboard: pd.DataFrame, model: str, bucket: str) -> pd.Series | None:
+        """One model's error measures for one horizon bucket, or None when the leaderboard has no such row."""
+        if leaderboard.empty:
+            return None
+        rows = leaderboard[(leaderboard["model"] == model) & (leaderboard["horizon_bucket"] == bucket)]
+        return None if rows.empty else rows.iloc[0]
 
     @staticmethod
     def improvement(score: float, baseline: float) -> float:
         """Share by which a score beats the baseline, positive when lower is better."""
         return 1 - score / baseline if baseline else 0.0
-
-    @staticmethod
-    def coverage(frame: pd.DataFrame) -> dict:
-        """How often the actual fell inside the interval, over rows that have one."""
-        with_band = frame.dropna(subset=["lower", "upper"])
-        inside = (with_band["actual"] >= with_band["lower"]) & (with_band["actual"] <= with_band["upper"])
-        return {
-            "share": float(inside.mean()) if len(with_band) else float("nan"),
-            "rows": int(len(with_band)),
-            "as_of_dates": int(with_band["as_of_date"].nunique()) if len(with_band) else 0,
-        }

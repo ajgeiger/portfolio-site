@@ -42,22 +42,6 @@ class AbstractForecastFigure(ABC):
         )
         return figure
 
-    @staticmethod
-    def band(dates, lower, upper, name: str, fill: str, legend_group: str | None = None) -> list[go.Scatter]:
-        """Two traces that shade the area between lower and upper."""
-        common = {"x": list(dates), "mode": "lines", "line": {"width": 0}, "legendgroup": legend_group or name}
-        return [
-            go.Scatter(y=list(upper), showlegend=False, hoverinfo="skip", **common),
-            go.Scatter(
-                y=list(lower),
-                fill="tonexty",
-                fillcolor=fill,
-                name=name,
-                hovertemplate="%{y:.3f}",
-                **common,
-            ),
-        ]
-
     @abstractmethod
     def build(self, *args, **kwargs) -> go.Figure:
         """Return the finished figure."""

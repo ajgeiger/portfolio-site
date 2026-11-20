@@ -15,7 +15,7 @@ class ForecastCache:
     Dates stay as YYYY-MM-DD text in the files and become pandas timestamps here.
     """
 
-    DATE_COLUMNS = ("as_of_date", "target_date", "date", "first_as_of_date", "last_as_of_date")
+    DATE_COLUMNS = ("as_of_date", "target_date", "date", "first_as_of_date", "last_as_of_date", "trial_started")
 
     def __init__(self, settings: Settings | None = None, folder: Path | None = None):
         self.settings = settings or Settings()
@@ -44,6 +44,18 @@ class ForecastCache:
 
     def rolling_accuracy(self) -> pd.DataFrame:
         return self.table(ForecastSnapshotBuilder.ROLLING_FILE, [])
+
+    def standings(self) -> pd.DataFrame:
+        return self.table(ForecastSnapshotBuilder.STANDINGS_FILE, ForecastSnapshotBuilder.STANDING_COLUMNS)
+
+    def events(self) -> pd.DataFrame:
+        return self.table(ForecastSnapshotBuilder.EVENTS_FILE, ForecastSnapshotBuilder.EVENT_COLUMNS)
+
+    def trials(self) -> pd.DataFrame:
+        return self.table(ForecastSnapshotBuilder.TRIALS_FILE, ForecastSnapshotBuilder.TRIAL_COLUMNS)
+
+    def promotions(self) -> pd.DataFrame:
+        return self.table(ForecastSnapshotBuilder.PROMOTIONS_FILE, ForecastSnapshotBuilder.PROMOTION_COLUMNS)
 
     def metadata(self) -> dict:
         path = self.folder / ForecastSnapshotBuilder.METADATA_FILE

@@ -35,6 +35,15 @@ class Formats:
             return "n/a"
         return f"{'+' if value >= 0 else '-'}{abs(value):.{digits}f}"
 
+    @classmethod
+    def error(cls, measure: str, value: float) -> str:
+        """A forecast error measure: MAPE and WAPE in percent, bias with its sign, MAE as a plain number."""
+        if measure in ("mape", "wape"):
+            return cls.percent(value / 100, 2)
+        if measure == "bias":
+            return cls.signed(value)
+        return cls.decimal(value)
+
     @staticmethod
     def points(change: float) -> str:
         sign = "+" if change >= 0 else "-"

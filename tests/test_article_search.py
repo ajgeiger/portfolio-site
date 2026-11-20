@@ -81,7 +81,7 @@ def test_search_box_can_be_a_text_input():
 
 
 def test_branch_card_accent_is_clipped_and_inset():
-    svg = CardSvg.branch("3 TOPICS", "Demo", "10 articles", 0.4, "group")
+    svg = CardSvg.branch("3 TOPICS", "Sample", "10 articles", 0.4, "group")
     raw = unquote(svg.split(",", 1)[1])
     assert 'clipPath id="card"' in raw
     assert 'clip-path="url(#card)"' in raw

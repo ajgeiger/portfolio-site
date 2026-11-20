@@ -75,10 +75,10 @@ def test_outage_gives_a_clear_message_and_offline_status(offline_chatbot):
     assert AskCopy.STATUS_OFFLINE in text_of(page.method_note.status(None))
 
 
-def test_status_names_the_model_or_demo_mode(chatbot):
+def test_status_names_the_model_or_retrieval_only(chatbot):
     page = AskPage(chatbot)
     assert "claude-sonnet-5-5" in text_of(page.method_note.status(page.service_info()))
-    assert AskCopy.STATUS_DEMO in text_of(page.method_note.status({"demo_mode": True}))
+    assert AskCopy.STATUS_RETRIEVAL in text_of(page.method_note.status({"demo_mode": True}))
 
 
 def test_callbacks_register_on_a_dash_app(chatbot):

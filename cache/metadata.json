@@ -1,0 +1,32 @@
+{
+  "built_at": "2026-11-19T08:51:06+00:00",
+  "source_folder": "/workspace/headline-radar",
+  "last_load_time": "2026-11-18T22:48:06+00:00",
+  "article_rows": 41371,
+  "rows_with_text": 41277,
+  "topic_count": 283,
+  "unassigned_rows": 16523,
+  "missing_rows": 94,
+  "repeat_text_rows": 14529,
+  "earliest_published": "2004-03-05 05:00:00+00:00",
+  "latest_published": "2026-12-01 05:01:00+00:00",
+  "earliest_recent_published": "2026-10-20 02:58:00+00:00",
+  "stale_date_rows": 225,
+  "future_date_rows": 27,
+  "unknown_date_rows": 0,
+  "stale_after_days": 30,
+  "hdbscan_clusters": 341,
+  "clusters_kept_as_topics": 283,
+  "topic_info_counts_match": true,
+  "labels_saved_in_model": {
+    "0": "Topic 0 (man)",
+    "1": "Topic 1 (ghana)"
+  },
+  "join": {
+    "fitted_rows": 41277,
+    "fitted_rows_without_database_match": 0,
+    "database_rows": 41371,
+    "blank_rows_added_as_missing": 94,
+    "database_rows_with_text_not_in_fit": 0
+  }
+}

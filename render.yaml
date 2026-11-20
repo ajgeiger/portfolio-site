@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: portfolio-site
+    runtime: python
+    plan: starter
+    buildCommand: pip install .
+    startCommand: gunicorn app:server --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    healthCheckPath: /
+    domains:
+      - ajgeiger.com
+    envVars:
+      - key: HOST
+        value: "0.0.0.0"
+      - key: PYTHON_VERSION
+        value: "3.13.5"
+      - key: CHATBOT_API_URL
+        sync: false
+      - key: CHATBOT_API_KEY
+        sync: false

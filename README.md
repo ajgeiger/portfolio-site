@@ -1,6 +1,6 @@
 # Alex Geiger, Lead Applied AI Scientist: Portfolio Site
 
-A personal portfolio website built in Plotly Dash. It covers my background and resume, and hosts analytics projects on real data that visitors can open and explore. The first project is the **News Topic Explorer**: 41,371 news articles grouped into 283 topics by Headline Radar, my own BERTopic style topic model, turned into a map you can walk from the whole corpus down to single headlines. The second is the **Natural Gas Price Forecast**: rolling backtests of four models on public futures, weather and storage data, and the champion and challenger that now forecast every trading morning.
+A personal portfolio website built in Plotly Dash. It covers my background and resume, and hosts analytics projects on real data that visitors can open and explore. The first project is the **News Topic Explorer**: 41,371 news articles grouped into 283 topics by Headline Radar, my own BERTopic style topic model, turned into a map you can walk from the whole corpus down to single headlines. The second is the **Natural Gas Price Forecast**: a natural gas futures forecast in production, published every trading morning by a model tournament in which Chronos-2, gradient boosting and Greykite compete with a naive baseline over three horizons, built on rolling backtests of public futures, weather and storage data.
 
 **[Run it in three commands](#run-it)** &nbsp;\|&nbsp; [The website](#the-website) &nbsp;\|&nbsp; [Ask page](#ask-page) &nbsp;\|&nbsp; [Add a project](#add-a-project) &nbsp;\|&nbsp; [News Topic Explorer](#news-topic-explorer) &nbsp;\|&nbsp; [Natural Gas Price Forecast](#natural-gas-price-forecast) &nbsp;\|&nbsp; [Data flow](#data-flow) &nbsp;\|&nbsp; [Sources](#sources)
 
@@ -15,7 +15,7 @@ A personal portfolio website built in Plotly Dash. It covers my background and r
 | `/resume` | Resume | The full resume as a web document, section by section and word for word, with the PDF download. It prints cleanly. |
 | `/ask` | Ask | Questions about my projects and experience, answered from my resume and project READMEs, with numbered citations, source chips, suggested questions and a short note on the method. |
 | `/projects/news-topic-explorer` | News Topic Explorer | A short case study (question, data, approach, key findings) above the live explorer. |
-| `/projects/natural-gas-price-forecast` | Natural Gas Price Forecast | A case study, then six numbered sections: summary, backtest demo, model leaderboard, staged predictions, live forecast against actuals, and how it runs. |
+| `/projects/natural-gas-price-forecast` | Natural Gas Price Forecast | The case study and headline error measures, then the active predictions in production, the tournament leaderboard with event winners and a collapsible model scoreboard, and the model selection backtests. |
 
 Every page shares a sticky header (Home, Projects, Resume, Ask, About, Contact), a footer with GitHub and Kaggle links, and a layout that adapts down to phone width. Numbers on the home and projects pages are computed from each project's data when the site starts, so they never drift from the app.
 
@@ -116,62 +116,61 @@ The side panel lists headlines for the current view. A rounded search field filt
 
 ## Natural Gas Price Forecast
 
-**Can a model forecast natural gas futures better than repeating the last price?**
+**How do forecasting models compete, qualify and serve daily natural gas predictions in production?**
 
-The page presents my [natural-gas-forecasting](https://github.com/ajgeiger/natural-gas-forecasting) project the way a consulting team would present a forecast review: the answer first, then the evidence, then what runs in production and where it falls short. The forecast target is the daily high of the front-month natural gas futures contract (Yahoo Finance `NG=F`), in dollars per MMBtu. Weather in major gas-demand cities and EIA weekly storage are the inputs. All of it is public data.
+The page presents my [natural-gas-forecasting](https://github.com/ajgeiger/natural-gas-forecasting) project as a forecast in production: what production forecasts today and which model serves each horizon first, then the tournament standings behind it and the backtests every score starts from. Every model is measured with the same four numbers: MAE, MAPE, WAPE and bias. The forecast target is the daily high of the front-month natural gas futures contract (Yahoo Finance `NG=F`), in dollars per MMBtu. Weather in major gas-demand cities and EIA weekly storage are the inputs. All of it is public data.
 
-![Case study header](docs/images/natgas-header.png)
+The forecasting repository runs a daily tournament. Each model family (Chronos-2, gradient boosting, Greykite) has a champion and a challenger in its own MLflow registry, and naive is the baseline. The champions compete in three horizon events: days 1 to 5, days 6 to 15 and days 16 to 30. A champion qualifies for an event when it beats naive there by at least 1% on blended MAE, which mixes its last 30 matured production days with its backtest MAE, and the lowest qualified score wins. When nobody qualifies, naive wins. The three winners are stitched into the `production` forecast. A challenger takes its family's title after 60 matured production days ahead of its champion.
 
 | Section | What it shows |
 | --- | --- |
-| 01 Summary | Champion MAE against naive, MAPE, 80% band coverage, the number of backtest dates and the latest live run. |
-| 02 Backtest demo | A slider over all 125 as-of dates. Price history up to the date, the Chronos-2 forecast with its 10th to 90th percentile band, a second model of your choice and the actuals, with each model's MAE for that date. |
-| 03 Model leaderboard | MAE, RMSE, MAPE, WAPE and bias for every model, overall and by horizon bucket (days 1 to 5, 6 to 15, 16 to 30), and MAE at each day ahead. |
-| 04 Staged predictions | The newest live run: the production path (Chronos-2, registry version 8, with its band) against the staging path (gradient boosting, version 9), with a run selector. |
-| 05 Live forecast against actuals | Matured live forecasts against the settled price and the rolling accuracy over the last 20 as-of dates. Until the first target date settles it shows a pending state with the date the first actual is due. |
-| 06 How it runs | Data refresh, scoring, actuals backfill, monitoring and this dashboard, plus method notes and caveats. |
+| Top of the page | The question, data and approach, three key findings (how the tournament runs, which models serve production and the 30 day accuracy profile), and four cards for the best model over all 30 backtest days: MAE, MAPE, WAPE and bias, each next to naive. |
+| Active predictions in production | A scoring run dropdown, newest run first and selected by default. The chart shows the stitched production path for that run, colored by the model behind each segment. The family champions and the naive baseline can be added as dotted lines. The run details give the run id, as-of date, scoring time, horizon and contender count, and the forecast model card shows the model serving each segment, in its color, with its role and its backtest MAE, MAPE, WAPE and bias for that horizon. |
+| Model leaderboard | One card per event with the winning model, its role and blended MAE, and its MAPE, WAPE and bias for that horizon. Below them, a collapsible model scoreboard, closed by default. Opened, it shows the standings for the selected horizon (days 1 to 5, 6 to 15, 16 to 30 or all days): rank, model and role, blended MAE, backtest MAE, production MAE and weight, and a status (winner, qualified, below the 1% bar, in trials, baseline). |
+| Model selection backtests | The rolling-origin backtests used to train and tune each family, which seed every blended score. A slider over all 125 as-of dates shows the price history, the Chronos-2 forecast, a second model of your choice and the actuals, with each model's MAE for that date. Below it, MAE, MAPE, WAPE and bias per family by horizon. |
 
-![Summary cards](docs/images/natgas-summary.png)
+![Case study header and headline numbers](docs/images/natgas-summary.png)
 
-![Backtest demo](docs/images/natgas-backtest.png)
+![Active predictions in production](docs/images/natgas-production.png)
 
 ![Model leaderboard](docs/images/natgas-leaderboard.png)
 
-![Staged predictions](docs/images/natgas-staged.png)
-
-![Live forecast against actuals, pending](docs/images/natgas-live.png)
-
-![How it runs, method notes and caveats](docs/images/natgas-pipeline.png)
+![Model selection backtests](docs/images/natgas-backtest.png)
 
 ### Numbers on the page
 
 Every number is computed from the snapshot when the site starts and matches the tables in the forecasting repository.
 
-| Model | MAE | RMSE | MAPE | WAPE | Bias | MAE vs naive |
-| --- | --- | --- | --- | --- | --- | --- |
-| Chronos-2 (champion) | 0.5192 | 0.7975 | 13.12% | 13.65% | -0.0420 | 1.28% better |
-| Gradient boosting (challenger) | 0.5212 | 0.8028 | 13.41% | 13.70% | +0.0077 | 0.90% better |
-| Naive | 0.5259 | 0.8107 | 13.50% | 13.82% | +0.0037 | baseline |
-| Greykite | 0.7362 | 1.0741 | 19.36% | 19.35% | +0.0030 | 39.98% worse |
+Tournament as of Nov 18, 2026. No forecast has matured in production yet, so every blended MAE equals the backtest MAE.
 
-Actuals fell inside the Chronos-2 80% band 72.9% of the time over the 124 as-of dates that have a band (Oct 2, 2026 has none). The first live run is as of Nov 18, 2026, with a production day 1 forecast of 3.474 (band 3.302 to 3.641).
+| Event | Serving in production | Blended MAE | MAPE | WAPE | Bias |
+| --- | --- | --- | --- | --- | --- |
+| Days 1 to 5 | Naive v1 | 0.2476 | 6.18% | 6.50% | -0.0015 |
+| Days 6 to 15 | Gradient boosting v1 | 0.4594 | 11.84% | 12.05% | +0.0042 |
+| Days 16 to 30 | Chronos-2 v1 | 0.6459 | 16.32% | 17.01% | -0.0496 |
+
+MAPE, WAPE and bias are the backtest scores for that horizon.
+
+Backtests over all 30 days, best configuration per family:
+
+| Model | MAE | MAPE | WAPE | Bias |
+| --- | --- | --- | --- | --- |
+| Chronos-2 | 0.5192 | 13.12% | 13.65% | -0.0420 |
+| Gradient boosting | 0.5212 | 13.41% | 13.70% | +0.0077 |
+| Naive | 0.5259 | 13.50% | 13.82% | +0.0037 |
+| Greykite | 0.7362 | 19.36% | 19.35% | +0.0030 |
+
+The latest production run is as of Nov 18, 2026: 3.418 on day 1 (naive), 3.576 on day 10 (gradient boosting) and 3.732 on day 30 (Chronos-2).
 
 ### The snapshot
 
-The hosted site cannot read the forecasting database, so `build_forecast_cache.py` copies what the page needs into `cache/natgas/` (about 300 KB, committed to the repository):
+The hosted site cannot read the forecasting database, so `build_forecast_cache.py` copies what the page needs into `cache/natgas/` (about 350 KB, committed to the repository):
 
 ```bash
 python build_forecast_cache.py    # reads ../natural-gas-forecasting, or NATGAS_FORECASTING_PATH
 ```
 
-`ForecastSnapshotBuilder` opens `data/natgas.db` read only (`mode=ro`) and reads `outputs/backtest_forecasts.parquet`, checking its row count against the database table. It writes the backtest forecasts, settled prices, every live prediction, matured actuals and the two accuracy views as parquet, plus `metadata.json`. A price bar loaded on its own trading day is left for the next refresh, since that session may still be trading. Run it again after each scoring run to pick up new predictions and actuals. Without the source folder it says so and leaves the current snapshot alone, and without a snapshot the page still renders with a short note. Nothing is scored or refit here.
-
-### Caveats shown on the page
-
-* The champion's edge over naive is modest: 1.28% lower MAE. Naive is slightly better over days 1 to 5; Chronos-2 leads on days 16 to 30.
-* The 80% band holds 72.9% of actuals, so it runs narrow.
-* Backtests used observed weather for all 30 days. Live runs use the Open-Meteo weather forecast for days 1 to 10 and 10 year average degree days by day of year, smoothed over 15 days, for days 11 to 30.
-* The target is the front-month daily high price, not demand.
+`ForecastSnapshotBuilder` opens `data/natgas.db` read only (`mode=ro`) and reads `outputs/backtest_forecasts.parquet`, checking its row count against the database table. It writes the backtest forecasts, settled prices, every prediction (the stitched `production` stage, each contender stage such as `chronos:champion` or `baseline:naive`, and the `legacy:*` rows from before the tournament), matured actuals, the two accuracy views and the tournament tables (`tournament_standings`, `event_winners`, `challenger_trials`, `promotion_history`) as parquet, plus `metadata.json`. A database from before the tournament gives empty tournament tables, and the page says so. A price bar loaded on its own trading day is left for the next refresh, since that session may still be trading. Run it again after each scoring run to pick up new predictions and actuals. Without the source folder it says so and leaves the current snapshot alone, and without a snapshot the page still renders with a short note. Nothing is scored or refit here.
 
 ## Code highlights
 
@@ -218,12 +217,12 @@ flowchart LR
 
 ## Run it
 
-Python 3.11 or newer. Headline Radar's fitted outputs must sit in a sibling folder named `headline-radar`, or set `HEADLINE_RADAR_PATH`.
+Python 3.11 or newer. A fresh clone can run from the committed caches in `cache/`. To rebuild the topic cache, Headline Radar's fitted outputs must sit in a sibling folder named `headline-radar`, or set `HEADLINE_RADAR_PATH`.
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[build,dev]"
-python build_cache.py      # once, or after the topic model is refit
+python build_cache.py      # only after the topic model is refit; a copy is committed
 python build_forecast_cache.py   # refresh the natural gas forecast snapshot (optional, a copy is committed)
 python app.py              # then open http://127.0.0.1:8050
 ```
@@ -245,11 +244,12 @@ Tests use small hand made fixtures, never the real corpus.
 
 ```text
 app.py                  start the portfolio website
+render.yaml             Render Starter web service for the hosted site
 build_cache.py          build the cache from Headline Radar outputs
 build_forecast_cache.py snapshot the natural gas forecast outputs into cache/natgas
 config/                 Settings, Profile, Resume and its entry classes, AskCopy, Theme, Formats, ForecastModels
 data/                   readers, CacheBuilder and data sources; data/forecast/ ForecastSnapshotBuilder and ForecastCache
-analytics/              tree building, navigation, trends, search, labels; analytics/forecast/ accuracy, backtest windows, runs
+analytics/              tree building, navigation, trends, search, labels; analytics/forecast/ accuracy, backtest windows, runs, tournament results
 components/             site shell, project cards, resume link, case study header, explorer parts, Ask page parts; components/forecast/ charts, tables and blocks for the forecast page
 pages/                  AbstractPage, AbstractProjectPage, HomePage, ProjectsPage, ResumePage, AskPage, TopicExplorerPage, PriceForecastPage
 portfolio/              PortfolioApp, Project, ProjectRegistry
@@ -277,6 +277,12 @@ model.set_topic_labels(labels)
 * Almost all articles were published on Nov 18, 2026, so the rising view falls back from 7 days to the last 6 hours, and says so on screen.
 * A few topics form around publisher boilerplate (a site name or wire service tagline) rather than a story.
 * The saved model holds two placeholder labels (`Topic 0 (man)`, `Topic 1 (ghana)`) that the pipeline's own outputs do not use, so the explorer starts from keyword names.
+
+## Deploying
+
+The site runs on Render's Starter plan, described in `render.yaml`. The build installs the project, and gunicorn serves `app:server` on the port Render provides. Pages read only the committed caches in `cache/` and `cache/natgas/`, so Headline Radar and the forecasting repository are not needed at runtime.
+
+Connect the GitHub repository to Render, then set `CHATBOT_API_URL` (and `CHATBOT_API_KEY` if the Ask service requires one) in the dashboard. Add `ajgeiger.com` as a custom domain and point its Cloudflare DNS records at the values Render shows. Render issues the certificate once the records are in place.
 
 ## Sources
 

@@ -1,17 +1,11 @@
-"""A numbered section title, so the page reads like a short deck."""
+"""A section title with one plain sentence on what the section shows."""
 
 from dash import html
 
 
 class SectionHeading:
-    """Number, title and one plain sentence on what the section shows."""
+    """Title and lead on the left, an optional control on the right."""
 
-    def build(self, number: int, title: str, lead: str, side=None) -> html.Div:
-        text = html.Div(
-            [
-                html.Div(f"{number:02d}", className="deck-number"),
-                html.Div([html.H2(title, className="deck-title"), html.P(lead, className="deck-lead")]),
-            ],
-            className="deck-heading-text",
-        )
+    def build(self, title: str, lead: str, side=None) -> html.Div:
+        text = html.Div([html.H2(title, className="deck-title"), html.P(lead, className="deck-lead")])
         return html.Div([text, side] if side is not None else [text], className="deck-heading")
