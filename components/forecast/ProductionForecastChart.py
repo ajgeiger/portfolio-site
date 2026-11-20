@@ -15,7 +15,7 @@ class ProductionForecastChart(AbstractForecastFigure):
     Family champions can be drawn as thin dotted lines for comparison.
     """
 
-    HEIGHT = 580
+    HEIGHT = 480
     HISTORY_COLOR = "#A3ABB8"
 
     def build(self, history: pd.DataFrame, run: pd.DataFrame, compare: list[str] | None = None) -> go.Figure:

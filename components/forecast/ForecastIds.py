@@ -12,7 +12,7 @@ class ForecastIds:
     RUN_SELECTOR = "natgas-run-selector"
     RUN_DETAILS = "natgas-run-details"
     PRODUCTION_CHART = "natgas-production-chart"
-    PATH_TABLE = "natgas-path-table"
+    MODEL_CARD = "natgas-model-card"
     COMPARE_CHAMPIONS = "natgas-compare-champions"
     LEADERBOARD_BUCKET = "natgas-leaderboard-bucket"
     LEADERBOARD_TABLE = "natgas-leaderboard-table"

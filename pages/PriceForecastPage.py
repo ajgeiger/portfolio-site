@@ -13,7 +13,7 @@ from components.forecast.BacktestFanChart import BacktestFanChart
 from components.forecast.BacktestScoreTable import BacktestScoreTable
 from components.forecast.EventWinners import EventWinners
 from components.forecast.ForecastIds import ForecastIds as Ids
-from components.forecast.ForecastPathTable import ForecastPathTable
+from components.forecast.ForecastModelCard import ForecastModelCard
 from components.forecast.KpiCards import KpiCards
 from components.forecast.ProductionForecastChart import ProductionForecastChart
 from components.forecast.RunDetails import RunDetails
@@ -224,12 +224,12 @@ class PriceForecastPage(AbstractProjectPage):
                                 ),
                                 html.Div(
                                     [
-                                        html.H3("Forecast path"),
+                                        html.H3("Forecast model"),
                                         html.Div(
-                                            "Dollars per MMBtu",
+                                            "Winning model stitched into each horizon segment",
                                             className="panel-subtitle",
                                         ),
-                                        html.Div(id=Ids.PATH_TABLE, className="table-wrap"),
+                                        html.Div(id=Ids.MODEL_CARD),
                                     ],
                                     className="panel deck-panel",
                                 ),
@@ -356,7 +356,7 @@ class PriceForecastPage(AbstractProjectPage):
 
         @app.callback(
             Output(Ids.PRODUCTION_CHART, "figure"),
-            Output(Ids.PATH_TABLE, "children"),
+            Output(Ids.MODEL_CARD, "children"),
             Output(Ids.RUN_DETAILS, "children"),
             Input(Ids.RUN_SELECTOR, "value"),
             Input(Ids.COMPARE_CHAMPIONS, "value"),
@@ -369,7 +369,7 @@ class PriceForecastPage(AbstractProjectPage):
             return StandingsTable().build(self.tournament.standings(bucket or self.DEFAULT_BUCKET))
 
     def run_view(self, run_id: str | None, compare: list[str] | None = None) -> tuple:
-        """Chart, forecast path table and details for one run."""
+        """Chart, forecast model card and details for one run."""
         run = self.runs.run(run_id)
         as_of = run["as_of_date"].max() if len(run) else None
         history = (
@@ -378,7 +378,8 @@ class PriceForecastPage(AbstractProjectPage):
             else pd.DataFrame(columns=["date", "high"])
         )
         chart = ProductionForecastChart().build(history, run, compare)
-        return chart, ForecastPathTable().build(self.runs.production(run_id)), RunDetails().build(run)
+        models = ForecastModelCard().build(self.runs.production(run_id), self.tournament.events_on(as_of))
+        return chart, models, RunDetails().build(run)
 
     def fan_stats(self, as_of: pd.Timestamp, models: list[str]) -> list:
         """Small chips under the fan chart: each model's MAE on this date."""

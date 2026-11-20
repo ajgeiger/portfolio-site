@@ -41,6 +41,13 @@ class TournamentResults:
         """The three event winners, in horizon order."""
         return self.latest(self.all_events).sort_values("first_day").reset_index(drop=True)
 
+    def events_on(self, as_of) -> pd.DataFrame:
+        """The event winners for one as-of date, in horizon order. Empty when that date has none."""
+        if self.all_events.empty or as_of is None:
+            return self.all_events.iloc[0:0]
+        rows = self.all_events[self.all_events["as_of_date"] == pd.Timestamp(as_of)]
+        return rows.sort_values("first_day").reset_index(drop=True)
+
     def standings(self, bucket: str) -> pd.DataFrame:
         """Every contender for one horizon bucket, best rank first."""
         rows = self.latest(self.all_standings)

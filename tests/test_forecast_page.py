@@ -12,12 +12,13 @@ from components.forecast.BacktestFanChart import BacktestFanChart
 from components.forecast.BacktestScoreTable import BacktestScoreTable
 from components.forecast.EventWinners import EventWinners
 from components.forecast.ForecastIds import ForecastIds
-from components.forecast.ForecastPathTable import ForecastPathTable
+from components.forecast.ForecastModelCard import ForecastModelCard
 from components.forecast.KpiCards import KpiCards
 from components.forecast.ProductionForecastChart import ProductionForecastChart
 from components.forecast.RunDetails import RunDetails
 from components.forecast.SectionHeading import SectionHeading
 from components.forecast.StandingsTable import StandingsTable
+from config.ForecastModels import ForecastModels
 from config.Settings import Settings
 from data.forecast.ForecastCache import ForecastCache
 from data.forecast.ForecastSnapshotBuilder import ForecastSnapshotBuilder
@@ -179,16 +180,37 @@ def test_run_selector_defaults_to_the_newest_run(cache_factory):
     assert "Scoring run" in text_of(layout)
 
 
-def test_run_details_and_path_table_describe_the_run(cache_factory):
+def test_run_details_stay_compact(cache_factory):
+    details = RunDetails().build(run_of(cache_factory()))
+    labels = [text_of(item.children[0]) for item in details.children]
+    assert labels == ["Run", "As-of date", "Scored", "Horizon", "Contenders"]
+    for expected in ("run1", "Mar 15, 2024", "20 trading days", "5"):
+        assert expected in text_of(details)
+
+
+def test_forecast_model_card_highlights_the_winner_of_each_event(cache_factory):
     cache = cache_factory()
-    details = text_of(RunDetails().build(run_of(cache)))
-    for expected in ("run1", "Mar 15, 2024", "20 trading days", "Days 6 to 15", "Gradient boosting v1", "Chronos-2 v1"):
-        assert expected in details
-    table = text_of(ForecastPathTable().build(PredictionRuns(cache.predictions()).production("run1")))
-    for expected in ("Day 1", "Day 6", "Day 10", "Day 16", "Naive v1", "3.660"):
-        assert expected in table
-    assert "3.300" not in table and "3.700" not in table
-    assert "Day 30" not in table
+    production = PredictionRuns(cache.predictions()).production("run1")
+    events = tournament_of(cache).events_on(pd.Timestamp("2024-03-15"))
+    card = ForecastModelCard().build(production, events)
+    rows = card.children
+    assert [text_of(row.children[0]) for row in rows] == ["Days 1 to 5", "Days 6 to 15", "Days 16 to 30"]
+    assert [text_of(row.children[1]).strip() for row in rows] == ["Naive v1", "Gradient boosting v1", "Chronos-2 v1"]
+    assert rows[0].style == {"--model-color": ForecastModels.color("naive")}
+    assert rows[2].style == {"--model-color": ForecastModels.color("chronos")}
+    assert text_of(rows[0].children[2]) == "Baseline \u00b7 blended MAE 0.2000 \u00b7 no champion beat naive by 1%"
+    assert text_of(rows[1].children[2]) == "Champion \u00b7 blended MAE 0.4000 \u00b7 4.76% better than naive"
+
+
+def test_forecast_model_card_falls_back_to_the_production_rows(cache_factory):
+    cache = cache_factory()
+    production = PredictionRuns(cache.predictions()).production("run1")
+    card = ForecastModelCard().build(production, cache.events().iloc[0:0])
+    text = text_of(card)
+    assert "Days 16 to 20" in text and "Gradient boosting v1" in text
+    assert "Baseline \u00b7 from the production forecast" in text
+    assert "blended MAE" not in text
+    assert "No production runs" in text_of(ForecastModelCard().build(production.iloc[0:0], cache.events()))
 
 
 def test_section_heading_has_no_number():
@@ -226,6 +248,7 @@ def test_page_order_and_copy(cache_factory):
         "80% band",
         "Inside the band",
         "Interval coverage",
+        "Forecast path",
         "How it runs",
         "Caveats",
         "pending",
@@ -244,7 +267,7 @@ def test_run_view_updates_for_the_selected_run(cache_factory):
     chart, table, details = page.run_view("run1", ["chronos:champion"])
     assert "Chronos-2 champion path" in trace_names(chart)
     assert "run1" in text_of(details)
-    assert "Day 16" in text_of(table)
+    assert "Chronos-2 v1" in text_of(table) and "Days 16 to 30" in text_of(table)
 
 
 def test_scoreboard_is_collapsible_and_closed_by_default(cache_factory):

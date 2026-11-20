@@ -529,7 +529,6 @@ a { color: var(--accent); }
 .deck-table .rank-cell { width: 44px; text-align: center; color: var(--muted); font-weight: 700; }
 .deck-table td.strong { font-weight: 800; color: var(--navy); }
 .deck-table tr.is-top td { background: #F5F8FF; }
-.deck-table .path-model { white-space: nowrap; font-size: 13px; }
 .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .compare-row { display: flex; align-items: center; gap: 10px; }
 .compare-row .control-label { margin: 0; white-space: nowrap; }
@@ -560,3 +559,11 @@ a { color: var(--accent); }
 .run-selector-block { display: flex; flex-direction: column; gap: 6px; min-width: 340px; }
 .run-selector-block .control-label { margin: 0; }
 .run-selector .Select-control, .run-selector .dash-dropdown { border-radius: var(--radius-input); }
+
+/* Forecast model card */
+.model-events { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.model-event { border-left: 4px solid var(--model-color); background: color-mix(in srgb, var(--model-color) 8%, #FFFFFF); border-radius: var(--radius-input); padding: 10px 14px; }
+.model-event-days { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
+.model-event-name { display: flex; align-items: center; font-size: 16px; font-weight: 800; color: var(--navy); margin: 3px 0 2px; }
+.model-event-detail { font-size: 12px; color: var(--ink); }
+.deck-stack > .panel:last-child { flex: 1; }
