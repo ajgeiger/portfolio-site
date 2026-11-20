@@ -1,5 +1,7 @@
 """The Ask page against a stub chatbot service: answers, outage state and wiring."""
 
+import json
+
 from dash import Dash
 
 from components.AppShell import AppShell
@@ -101,3 +103,35 @@ def test_service_url_and_key_come_from_the_environment(monkeypatch):
     assert settings.chatbot_api_url == "https://example.hf.space"
     assert settings.chatbot_api_key == "secret-key"
     assert "secret-key" not in repr(settings)
+
+
+
+def test_second_question_sends_prior_turns():
+    seen = []
+
+    def handler(request):
+        seen.append(json.loads(request.read()))
+        return answering_handler(request)
+
+    page = AskPage(make_chatbot_client(handler))
+    history = page.answer("What does he do?", [])
+    page.answer("How long has he done that?", history)
+    assert seen[1]["question"] == "How long has he done that?"
+    assert seen[1]["history"][0] == {"role": "user", "content": "What does he do?"}
+    assert seen[1]["history"][1]["role"] == "assistant"
+    assert "sources" not in seen[1]["history"][1]
+
+
+def test_request_history_keeps_the_last_ten_turns_and_drops_outages():
+    from components.AskHistory import AskHistory
+
+    history = []
+    for number in range(12):
+        history.append({"role": "user", "content": f"question {number}"})
+        history.append({"role": "assistant", "content": f"answer {number}"})
+    history.append({"role": "assistant", "content": AskCopy.OUTAGE, "status": "outage"})
+    recent = AskHistory().for_request(history)
+    assert len(recent) == 20
+    assert recent[0]["content"] == "question 2"
+    assert all(item.get("status") != "outage" for item in recent)
+    assert all(len(item["content"]) <= AskHistory.MAX_CHARS for item in recent)
