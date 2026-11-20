@@ -33,6 +33,34 @@ def test_snapshot_writes_every_file_and_metadata(tmp_path):
     assert metadata["latest_run_id"] == "run1"
     assert metadata["latest_run_as_of_date"] == "2024-03-15"
     assert metadata["actual_rows"] == 0
+    assert "chronos:champion" in metadata["prediction_stages"]
+    assert "legacy:champion" in metadata["prediction_stages"]
+    assert metadata["tournament_as_of_date"] == "2024-03-15"
+    assert metadata["event_rows"] == 3
+    assert metadata["promotion_rows"] == 0
+
+
+def test_snapshot_exports_the_tournament_tables(tmp_path):
+    source = write_source(tmp_path / "natural-gas-forecasting")
+    settings = settings_for(tmp_path, source)
+    ForecastSnapshotBuilder(settings).build()
+    cache = ForecastCache(settings)
+    assert len(cache.standings()) == 20
+    assert cache.events()["first_day"].tolist() == [1, 6, 16]
+    assert cache.trials()["family"].tolist() == ["chronos", "gradient_boosting", "greykite"]
+    assert pd.api.types.is_datetime64_any_dtype(cache.trials()["trial_started"])
+    assert cache.promotions().empty
+    assert list(cache.promotions().columns) == ForecastSnapshotBuilder.PROMOTION_COLUMNS
+
+
+def test_snapshot_works_with_a_database_from_before_the_tournament(tmp_path):
+    source = write_source(tmp_path / "natural-gas-forecasting", tournament=False)
+    settings = settings_for(tmp_path, source)
+    metadata = ForecastSnapshotBuilder(settings).build()
+    cache = ForecastCache(settings)
+    assert metadata["tournament_as_of_date"] is None
+    assert cache.standings().empty and cache.events().empty and cache.trials().empty
+    assert list(cache.events().columns) == ForecastSnapshotBuilder.EVENT_COLUMNS
 
 
 def test_snapshot_never_changes_the_source(tmp_path):
@@ -85,7 +113,7 @@ def test_cache_reads_dates_and_keeps_matured_actuals(tmp_path):
     assert pd.api.types.is_datetime64_any_dtype(cache.backtest()["as_of_date"])
     assert str(cache.predictions()["run_timestamp"].dt.tz) == "UTC"
     assert len(cache.actuals()) == 4
-    assert set(cache.accuracy()["stage"]) == {"production", "staging"}
+    assert set(cache.accuracy()["stage"]) == {"production", "baseline:naive"}
 
 
 def test_cache_without_a_snapshot_gives_empty_tables(tmp_path):
@@ -94,3 +122,4 @@ def test_cache_without_a_snapshot_gives_empty_tables(tmp_path):
     assert cache.backtest().empty
     assert list(cache.predictions().columns) == ForecastSnapshotBuilder.PREDICTION_COLUMNS
     assert cache.metadata() == {}
+    assert cache.standings().empty and cache.trials().empty

@@ -59,8 +59,9 @@ class ProjectRegistry:
                 slug="natural-gas-price-forecast",
                 title="Natural Gas Price Forecast",
                 summary=(
-                    "A Chronos-2 forecast of natural gas futures in production, scored every trading morning beside "
-                    "a gradient boosting challenger, selected through rolling backtests of four model families."
+                    "A natural gas futures forecast in production, published each trading morning by a model "
+                    "tournament: Chronos-2, gradient boosting and Greykite compete with a naive baseline over three "
+                    "horizons."
                 ),
                 question="Can a model forecast natural gas futures better than repeating the last price?",
                 data=(
@@ -69,9 +70,10 @@ class ProjectRegistry:
                     "loaded into SQLite."
                 ),
                 approach=(
-                    "Chronos-2, gradient boosting, Greykite and a naive baseline, backtested on the same rolling "
-                    "dates with no look-ahead. The winner is promoted only when it beats naive by at least 1%, then "
-                    "registered in MLflow and scored each trading morning beside the challenger."
+                    "Each model family is trained and tuned in rolling backtests with no look-ahead, then registered "
+                    "in MLflow as a champion and a challenger. Every trading morning the champions compete in three "
+                    "horizon events, a champion wins only by beating naive by at least 1%, and the event winners "
+                    "are stitched into one forecast."
                 ),
                 tags=("Forecasting", "Time series", "MLflow", "Plotly Dash"),
                 thumbnail="images/natural-gas-price-forecast.png",

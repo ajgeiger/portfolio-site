@@ -1,4 +1,4 @@
-"""The model leaderboard: error measures by model for one horizon bucket."""
+"""Backtest error measures by model family, the scores that seed the tournament."""
 
 import pandas as pd
 from dash import html
@@ -8,7 +8,7 @@ from config.ForecastModels import ForecastModels
 from config.Formats import Formats
 
 
-class LeaderboardTable:
+class BacktestScoreTable:
     """A rounded table, best value in each column marked, with each model's change against naive."""
 
     COLUMNS = (("mae", "MAE"), ("rmse", "RMSE"), ("mape", "MAPE"), ("wape", "WAPE"), ("bias", "Bias"))
@@ -21,7 +21,7 @@ class LeaderboardTable:
         best = {key: (rows[key].abs().idxmin() if key == "bias" else rows[key].idxmin()) for key, _ in self.COLUMNS}
         header = html.Thead(
             html.Tr(
-                [html.Th("Model"), html.Th("Role")]
+                [html.Th("Model")]
                 + [html.Th(label, className="number") for _, label in self.COLUMNS]
                 + [html.Th("MAE vs naive", className="number")]
             )
@@ -37,7 +37,6 @@ class LeaderboardTable:
                     ],
                     className="model-cell",
                 ),
-                html.Td(ForecastModels.ROLES.get(model, ""), className="role-cell"),
             ]
             for key, _ in self.COLUMNS:
                 value = rows.loc[model, key]
@@ -50,8 +49,8 @@ class LeaderboardTable:
                 )
                 cells.append(html.Td(text, className="number" + (" is-best" if best[key] == model else "")))
             cells.append(html.Td(self.versus(rows.loc[model, "mae"], baseline, model), className="number"))
-            body.append(html.Tr(cells, className="is-champion" if model == ForecastModels.CHAMPION else None))
-        return html.Table([header, html.Tbody(body)], className="deck-table")
+            body.append(html.Tr(cells))
+        return html.Table([header, html.Tbody(body)], className="deck-table compact")
 
     @staticmethod
     def versus(mae: float, baseline: float | None, model: str) -> str:
