@@ -7,12 +7,23 @@ from analytics.forecast.BacktestWindow import BacktestWindow
 from analytics.forecast.ForecastAccuracy import ForecastAccuracy
 from analytics.forecast.ForecastSummary import ForecastSummary
 from analytics.forecast.PredictionRuns import PredictionRuns
-from tests.forecast_tables import AS_OF_DATES, make_actuals, make_backtest, make_predictions, make_prices
+from analytics.forecast.TournamentResults import TournamentResults
+from config.ForecastModels import ForecastModels
+from tests.forecast_tables import (
+    AS_OF_DATES,
+    make_actuals,
+    make_backtest,
+    make_events,
+    make_predictions,
+    make_prices,
+    make_standings,
+    make_trials,
+)
 
 
 def typed(frame: pd.DataFrame) -> pd.DataFrame:
     frame = frame.copy()
-    for column in ("as_of_date", "target_date", "date"):
+    for column in ("as_of_date", "target_date", "date", "trial_started"):
         if column in frame.columns:
             frame[column] = pd.to_datetime(frame[column])
     if "run_timestamp" in frame.columns:
@@ -82,9 +93,74 @@ def test_backtest_window_slices_one_date():
     assert len(window.actuals(as_of)) == 6
 
 
-def test_prediction_runs_list_newest_first():
+def test_prediction_runs_list_only_runs_that_published_a_forecast():
     runs = PredictionRuns(typed(make_predictions()))
     assert runs.latest_run_id() == "run1"
-    assert runs.runs().iloc[0]["stages"] == "production, staging"
-    assert len(runs.stage("run1", "production")) == 6
+    assert runs.runs()["run_id"].tolist() == ["run1"]
+    assert runs.runs().iloc[0]["contenders"] == 5
+    assert len(runs.production("run1")) == 20
+    assert len(runs.stage("run1", "chronos:champion")) == 20
     assert PredictionRuns(make_predictions().iloc[0:0]).latest_run_id() is None
+
+
+def test_production_segments_name_the_winner_of_each_event():
+    runs = PredictionRuns(typed(make_predictions()))
+    segments = runs.segments(runs.production("run1"))
+    assert segments[["first_day", "last_day", "model"]].values.tolist() == [
+        [1, 5, "naive"],
+        [6, 15, "gradient_boosting"],
+        [16, 20, "chronos"],
+    ]
+    assert runs.segments(runs.production("missing")).empty
+
+
+def tournament() -> TournamentResults:
+    return TournamentResults(typed(make_standings()), typed(make_events()), typed(make_trials()))
+
+
+def test_tournament_reads_the_latest_round():
+    results = tournament()
+    assert results.as_of_date == pd.Timestamp("2024-03-15")
+    assert results.events()["model"].tolist() == ["naive", "gradient_boosting", "chronos"]
+    assert results.families() == ["chronos", "gradient_boosting", "greykite"]
+    assert results.trials()["family"].tolist() == ["chronos", "gradient_boosting", "greykite"]
+    assert results.standings("days 6 to 15")["stage"].iloc[0] == "gradient_boosting:champion"
+    assert results.winner("days 16 to 30")["model"] == "chronos"
+    assert results.production_days() == 12
+
+
+def test_tournament_status_labels():
+    results = tournament()
+    labels = dict(
+        zip(
+            results.standings("days 6 to 15")["stage"],
+            results.standings("days 6 to 15").apply(TournamentResults.status, axis=1),
+            strict=True,
+        )
+    )
+    assert labels == {
+        "gradient_boosting:champion": "Winner",
+        "chronos:champion": "Qualified",
+        "baseline:naive": "Baseline",
+        "chronos:challenger": "In trials",
+        "greykite:champion": "Below the 1% bar",
+    }
+    overall = results.standings("all days").apply(TournamentResults.status, axis=1).tolist()
+    assert "Winner" not in overall and "Champion" in overall
+
+
+def test_empty_tournament_tables():
+    empty = TournamentResults(make_standings().iloc[0:0], make_events().iloc[0:0], make_trials().iloc[0:0])
+    assert empty.empty
+    assert empty.as_of_date is None
+    assert empty.events().empty and empty.trials().empty and empty.families() == []
+    assert empty.production_days() == 0
+
+
+def test_stage_names_cover_the_tournament_stages():
+    assert ForecastModels.stage_parts("chronos:champion") == ("chronos", "champion")
+    assert ForecastModels.stage_parts("baseline:naive") == ("naive", "baseline")
+    assert ForecastModels.stage_name("gradient_boosting:challenger") == "Gradient boosting challenger"
+    assert ForecastModels.stage_name("baseline:naive") == "Naive baseline"
+    assert ForecastModels.stage_name("production") == "Production"
+    assert ForecastModels.prose_name("gradient_boosting") == "gradient boosting"

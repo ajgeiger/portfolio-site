@@ -1,4 +1,4 @@
-"""The natural gas price forecast: the model in production, how it was chosen and the backtests behind it."""
+"""The natural gas price forecast: the model tournament, the published production forecast and the backtests."""
 
 import pandas as pd
 from dash import ALL, Dash, Input, Output, State, callback_context, dcc, html
@@ -7,16 +7,20 @@ from analytics.forecast.BacktestWindow import BacktestWindow
 from analytics.forecast.ForecastAccuracy import ForecastAccuracy
 from analytics.forecast.ForecastSummary import ForecastSummary
 from analytics.forecast.PredictionRuns import PredictionRuns
+from analytics.forecast.TournamentResults import TournamentResults
 from components.CaseStudyHeader import CaseStudyHeader
 from components.forecast.BacktestFanChart import BacktestFanChart
+from components.forecast.BacktestScoreTable import BacktestScoreTable
+from components.forecast.ChallengerTrialsTable import ChallengerTrialsTable
+from components.forecast.EventWinners import EventWinners
 from components.forecast.ForecastIds import ForecastIds as Ids
+from components.forecast.ForecastPathTable import ForecastPathTable
 from components.forecast.KpiCards import KpiCards
-from components.forecast.LeaderboardTable import LeaderboardTable
+from components.forecast.ProductionForecastChart import ProductionForecastChart
 from components.forecast.RunDetails import RunDetails
 from components.forecast.RunList import RunList
 from components.forecast.SectionHeading import SectionHeading
-from components.forecast.StagedForecastChart import StagedForecastChart
-from components.forecast.StagedRunTable import StagedRunTable
+from components.forecast.StandingsTable import StandingsTable
 from config.ForecastModels import ForecastModels
 from config.Formats import Formats
 from data.forecast.ForecastCache import ForecastCache
@@ -25,13 +29,14 @@ from portfolio.Project import Project
 
 
 class PriceForecastPage(AbstractProjectPage):
-    """The summary on top, then the model leaderboard, the active production forecast and the
-    backtests used to select the model. Every number comes from the snapshot files.
+    """The summary on top, then the tournament leaderboard, the published production forecast and the
+    backtests every score starts from. Every number comes from the snapshot files.
     """
 
     PRODUCTION_ANCHOR = "production-forecast"
     COMPARE_CHOICES = ("gradient_boosting", "naive", "greykite")
-    STAGED_HISTORY_DAYS = 40
+    DEFAULT_BUCKET = "days 16 to 30"
+    HISTORY_DAYS = 40
     GRAPH_CONFIG = {"displayModeBar": False, "responsive": True}
 
     def __init__(self, project: Project, cache: ForecastCache):
@@ -40,6 +45,7 @@ class PriceForecastPage(AbstractProjectPage):
         self.backtest = cache.backtest()
         self.window = BacktestWindow(self.backtest, cache.prices())
         self.runs = PredictionRuns(cache.predictions())
+        self.tournament = TournamentResults(cache.standings(), cache.events(), cache.trials())
         self.summary = ForecastSummary.from_tables(self.backtest, cache.predictions(), cache.actuals())
         self.leaderboard = ForecastAccuracy.leaderboard(self.backtest) if len(self.backtest) else pd.DataFrame()
         self.as_of_dates = self.window.as_of_dates()
@@ -55,7 +61,7 @@ class PriceForecastPage(AbstractProjectPage):
         return html.Div(
             [
                 header,
-                KpiCards().build(self.summary),
+                KpiCards().build(self.summary, self.tournament.events()),
                 self.leaderboard_section(),
                 self.production_section(),
                 self.backtest_section(),
@@ -77,43 +83,75 @@ class PriceForecastPage(AbstractProjectPage):
         buckets = dcc.RadioItems(
             id=Ids.LEADERBOARD_BUCKET,
             options=[{"label": bucket.capitalize(), "value": bucket} for bucket in ForecastAccuracy.BUCKET_ORDER],
-            value=ForecastAccuracy.ALL_DAYS,
+            value=self.DEFAULT_BUCKET,
             className="segmented pill",
             inline=True,
         )
+        as_of = self.tournament.as_of_date
         return html.Section(
             [
                 SectionHeading().build(
                     "Model leaderboard",
-                    f"The candidate models, scored on the same {Formats.count(self.summary.as_of_dates)} backtest "
-                    "dates. The lowest error earns production.",
+                    "Each family champion competes in three horizon events against the naive baseline. A champion "
+                    f"qualifies by beating naive by at least {Formats.percent(TournamentResults.MIN_IMPROVEMENT, 0)} "
+                    "on blended MAE, and the lowest qualified score wins the event."
+                    + (f" Standings as of {Formats.date(as_of)}." if as_of is not None else ""),
                     side=buckets,
                 ),
+                EventWinners().build(self.tournament.events()),
                 html.Div(
                     [
                         html.Div(id=Ids.LEADERBOARD_TABLE, className="table-wrap flush"),
-                        html.Div(
-                            "MAE, RMSE and bias in dollars per MMBtu, MAPE and WAPE in percent. Bias is "
-                            "forecast minus actual. The best value in each column is marked.",
-                            className="panel-note",
-                        ),
+                        html.Div(self.standings_note(), className="panel-note"),
                     ],
-                    className="panel deck-panel",
+                    className="panel deck-panel deck-gap",
+                ),
+                html.Div(
+                    [
+                        html.H3("Challenger trials"),
+                        html.Div(
+                            "Each family's challenger is scored every day beside its champion. It takes the title "
+                            "after 60 matured production days with a lower blended MAE.",
+                            className="panel-subtitle",
+                        ),
+                        html.Div(ChallengerTrialsTable().build(self.tournament.trials()), className="table-wrap"),
+                    ],
+                    className="panel deck-panel deck-gap",
                 ),
             ],
             className="deck-section",
         )
 
+    def standings_note(self) -> str:
+        note = (
+            "Blended MAE weights a model's last 30 matured production days against its backtest MAE, in dollars per "
+            "MMBtu. vs naive is the change in blended MAE against the baseline."
+        )
+        if self.tournament.production_days() == 0:
+            note += " No forecast has matured in production yet, so every blended MAE equals the backtest MAE."
+        return note
+
     def production_section(self) -> html.Section:
         selected = self.runs.latest_run_id()
         run_count = len(self.runs.runs())
+        compare = dcc.Checklist(
+            id=Ids.COMPARE_CHAMPIONS,
+            options=[
+                {"label": ForecastModels.name(ForecastModels.stage_parts(stage)[0]), "value": stage}
+                for stage in ForecastModels.CHAMPION_STAGES
+            ],
+            value=[],
+            className="compare-checklist",
+            inline=True,
+        )
         return html.Section(
             [
                 dcc.Store(id=Ids.RUN_SELECTED, data=selected),
                 SectionHeading().build(
                     "Active predictions in production",
-                    "The champion forecasts every trading morning, with the challenger scored beside it in staging. "
-                    "Select a run to see its forecast path, interval and details.",
+                    "Every trading morning each contender forecasts the next 30 trading days, the tournament picks "
+                    "the event winners, and their segments are stitched into one published forecast. Select a run "
+                    "to see its path and details.",
                 ),
                 html.Div(
                     [
@@ -122,7 +160,7 @@ class PriceForecastPage(AbstractProjectPage):
                                 html.H3("Scoring runs"),
                                 html.Div(
                                     f"{Formats.amount(run_count, 'run')}, newest first. Runs Tuesday to Saturday at "
-                                    "7:00 AM ET.",
+                                    "7:00 AM ET. Day values are the production forecast in dollars per MMBtu.",
                                     className="panel-subtitle",
                                 ),
                             ]
@@ -134,7 +172,24 @@ class PriceForecastPage(AbstractProjectPage):
                 html.Div(
                     [
                         html.Div(
-                            dcc.Graph(id=Ids.STAGED_CHART, config=self.GRAPH_CONFIG), className="panel deck-panel"
+                            [
+                                html.Div(
+                                    [
+                                        html.H3("Production forecast"),
+                                        html.Div(
+                                            [html.Span("Compare with champions", className="control-label"), compare],
+                                            className="compare-row",
+                                        ),
+                                    ],
+                                    className="panel-head",
+                                ),
+                                dcc.Graph(
+                                    id=Ids.PRODUCTION_CHART,
+                                    config=self.GRAPH_CONFIG,
+                                    style={"height": f"{ProductionForecastChart.HEIGHT}px"},
+                                ),
+                            ],
+                            className="panel deck-panel",
                         ),
                         html.Div(
                             [
@@ -146,10 +201,10 @@ class PriceForecastPage(AbstractProjectPage):
                                     [
                                         html.H3("Forecast path"),
                                         html.Div(
-                                            "Dollars per MMBtu, with the production 80% band",
+                                            "Dollars per MMBtu. The 80% band is shown where the winning model has one.",
                                             className="panel-subtitle",
                                         ),
-                                        html.Div(id=Ids.STAGED_TABLE, className="table-wrap"),
+                                        html.Div(id=Ids.PATH_TABLE, className="table-wrap"),
                                     ],
                                     className="panel deck-panel",
                                 ),
@@ -194,7 +249,9 @@ class PriceForecastPage(AbstractProjectPage):
                 ),
                 html.Div(
                     [
-                        html.Label("Compare the champion with", className="control-label"),
+                        html.Label(
+                            f"Compare {ForecastModels.name(ForecastModels.CHAMPION)} with", className="control-label"
+                        ),
                         dcc.RadioItems(
                             id=Ids.COMPARE_MODEL,
                             options=[
@@ -214,9 +271,10 @@ class PriceForecastPage(AbstractProjectPage):
             [
                 SectionHeading().build(
                     "Model selection backtests",
-                    f"Rolling-origin backtests over {Formats.count(self.summary.as_of_dates)} dates were used to "
-                    "train each model family, tune its hyperparameters and compare the results. Chronos-2 had the "
-                    "lowest error and was promoted to production. Move the slider to see any forecast date.",
+                    "The tournament starts from these rolling-origin backtests. Each family was trained and tuned at "
+                    f"the same {Formats.count(self.summary.as_of_dates)} dates, its two best configurations became "
+                    "the champion and the challenger, and their backtest MAE seeds every blended score until "
+                    "production days replace it. Move the slider to see any forecast date.",
                 ),
                 html.Div(
                     [
@@ -225,6 +283,18 @@ class PriceForecastPage(AbstractProjectPage):
                         html.Div(id=Ids.FAN_STATS, className="fan-stats"),
                     ],
                     className="panel deck-panel",
+                ),
+                html.Div(
+                    [
+                        html.H3("Backtest accuracy over all 30 days"),
+                        html.Div(
+                            "Best configuration per family. MAE, RMSE and bias in dollars per MMBtu, MAPE and WAPE in "
+                            "percent. Bias is forecast minus actual. The best value in each column is marked.",
+                            className="panel-subtitle",
+                        ),
+                        html.Div(BacktestScoreTable().build(self.leaderboard), className="table-wrap"),
+                    ],
+                    className="panel deck-panel deck-gap",
                 ),
             ],
             className="deck-section",
@@ -269,20 +339,21 @@ class PriceForecastPage(AbstractProjectPage):
             return self.clicked_run(callback_context.triggered_id, current)
 
         @app.callback(
-            Output(Ids.STAGED_CHART, "figure"),
-            Output(Ids.STAGED_TABLE, "children"),
+            Output(Ids.PRODUCTION_CHART, "figure"),
+            Output(Ids.PATH_TABLE, "children"),
             Output(Ids.RUN_DETAILS, "children"),
             Output({"type": Ids.RUN_ROW, "run": ALL}, "className"),
             Input(Ids.RUN_SELECTED, "data"),
+            Input(Ids.COMPARE_CHAMPIONS, "value"),
             State({"type": Ids.RUN_ROW, "run": ALL}, "id"),
         )
-        def show_run(run_id, row_ids):
-            chart, table, details = self.run_view(run_id)
+        def show_run(run_id, compare, row_ids):
+            chart, table, details = self.run_view(run_id, compare)
             return chart, table, details, [RunList.class_name(row["run"] == run_id) for row in row_ids]
 
         @app.callback(Output(Ids.LEADERBOARD_TABLE, "children"), Input(Ids.LEADERBOARD_BUCKET, "value"))
         def show_leaderboard(bucket):
-            return LeaderboardTable().build(self.leaderboard, bucket or ForecastAccuracy.ALL_DAYS)
+            return StandingsTable().build(self.tournament.standings(bucket or self.DEFAULT_BUCKET))
 
     @staticmethod
     def clicked_run(triggered_id, current: str | None) -> str | None:
@@ -291,12 +362,17 @@ class PriceForecastPage(AbstractProjectPage):
             return triggered_id["run"]
         return current
 
-    def run_view(self, run_id: str | None) -> tuple:
+    def run_view(self, run_id: str | None, compare: list[str] | None = None) -> tuple:
         """Chart, forecast path table and details for one run."""
         run = self.runs.run(run_id)
         as_of = run["as_of_date"].max() if len(run) else None
-        history = self.window.history(as_of, self.STAGED_HISTORY_DAYS) if as_of is not None else run.iloc[0:0]
-        return StagedForecastChart().build(history, run), StagedRunTable().build(run), RunDetails().build(run)
+        history = (
+            self.window.history(as_of, self.HISTORY_DAYS)
+            if as_of is not None
+            else pd.DataFrame(columns=["date", "high"])
+        )
+        chart = ProductionForecastChart().build(history, run, compare)
+        return chart, ForecastPathTable().build(self.runs.production(run_id)), RunDetails().build(run)
 
     def fan_stats(self, as_of: pd.Timestamp, models: list[str]) -> list:
         """Small chips under the fan chart: each model's MAE on this date and the band hit rate."""
@@ -328,10 +404,10 @@ class PriceForecastPage(AbstractProjectPage):
         if not self.cache.available:
             return [("n/a", "snapshot not built yet")]
         return [
-            (Formats.percent(summary.improvement, 2), "lower MAE than naive"),
-            (Formats.count(summary.as_of_dates), "backtest dates"),
-            (f"{summary.horizon_days} days", "forecast horizon, trading days"),
-            (Formats.percent(summary.coverage), "of actuals inside the 80% band"),
+            (str(len(self.tournament.families())), "model families plus a naive baseline"),
+            (str(len(self.tournament.events())), "horizon events in the production forecast"),
+            (Formats.count(summary.as_of_dates), "backtest dates behind every score"),
+            (Formats.percent(TournamentResults.MIN_IMPROVEMENT, 0), "margin a champion needs over naive"),
         ]
 
     def key_findings(self) -> list[str]:
@@ -339,19 +415,51 @@ class PriceForecastPage(AbstractProjectPage):
         if not self.cache.available:
             return ["The findings appear once the forecast snapshot is built."]
         summary = self.summary
-        board = self.leaderboard.set_index(["model", "horizon_bucket"])["mae"]
-        champion, baseline = ForecastModels.CHAMPION, ForecastModels.BASELINE
-        findings = [
-            f"Chronos-2 had the lowest error over 30 trading days: MAE {Formats.decimal(summary.champion_mae)} "
-            f"against {Formats.decimal(summary.baseline_mae)} for naive, {Formats.percent(summary.improvement, 2)} "
-            "lower, which cleared the 1% bar for promotion.",
-            f"Over the first 5 days repeating the last price is hard to beat (naive "
-            f"{Formats.decimal(board[(baseline, 'days 1 to 5')])}, Chronos-2 "
-            f"{Formats.decimal(board[(champion, 'days 1 to 5')])}). Chronos-2 pulls ahead on days 16 to 30.",
-        ]
-        if summary.latest_run_as_of is not None:
+        findings = []
+        families = [ForecastModels.prose_name(family) for family in self.tournament.families()]
+        if families:
+            names = self.joined(families)
             findings.append(
-                "Chronos-2 now runs in production every trading morning, with gradient boosting scored beside it "
-                f"as the challenger. The latest run is as of {Formats.date(summary.latest_run_as_of)}."
+                f"{names[:1].upper()}{names[1:]} compete with a naive baseline in three horizon events every trading "
+                f"morning. A champion has to beat naive by at least "
+                f"{Formats.percent(TournamentResults.MIN_IMPROVEMENT, 0)} on a blended production and backtest "
+                "score to win an event."
+            )
+        events = self.tournament.events()
+        if len(events):
+            results = [self.event_result(event) for event in events.itertuples()]
+            findings.append(
+                f"In the latest round, as of {Formats.date(self.tournament.as_of_date)}, {self.joined(results)}. "
+                "The winning segments make up the production forecast."
+            )
+        findings.append(
+            f"Over all 30 days {ForecastModels.name(ForecastModels.CHAMPION)} has the lowest backtest error, MAE "
+            f"{Formats.decimal(summary.champion_mae)} against {Formats.decimal(summary.baseline_mae)} for naive "
+            f"({Formats.percent(summary.improvement, 2)} lower), with {Formats.percent(summary.coverage)} of actuals "
+            "inside its 80% band."
+        )
+        trials = self.tournament.trials()
+        if len(trials):
+            days = sorted(set(trials["trial_days"].astype(int)))
+            progress = f"day {days[0]}" if len(days) == 1 else f"days {days[0]} to {days[-1]}"
+            findings.append(
+                f"Each family also has a challenger in trials. It takes the title only after "
+                f"{int(trials['required_days'].max())} matured production days ahead of its champion, and the "
+                f"challengers are at {progress} so far."
             )
         return findings
+
+    @staticmethod
+    def event_result(event) -> str:
+        days = f"days {int(event.first_day)} to {int(event.last_day)}"
+        name = ForecastModels.prose_name(event.model)
+        if event.improvement > 0:
+            return f"{name} wins {days} ({Formats.percent(event.improvement, 2)} better than naive)"
+        return f"{name} holds {days} because no champion beat it by 1%"
+
+    @staticmethod
+    def joined(items: list[str]) -> str:
+        """Join a list as plain prose: "a", "a and b" or "a, b and c"."""
+        if len(items) <= 1:
+            return "".join(items)
+        return f"{', '.join(items[:-1])} and {items[-1]}"

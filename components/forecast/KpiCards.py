@@ -1,41 +1,33 @@
-"""The row of headline numbers at the top of the forecast page."""
+"""The headline numbers at the top of the forecast page."""
 
+import pandas as pd
 from dash import html
 
 from analytics.forecast.ForecastSummary import ForecastSummary
+from config.ForecastModels import ForecastModels
 from config.Formats import Formats
 
 
 class KpiCards:
-    """Five cards: champion error against naive, MAPE, interval coverage, backtest dates and the latest run."""
+    """Six cards: the best 30 day backtest error, each event result, interval coverage and the latest run."""
 
-    def build(self, summary: ForecastSummary) -> html.Div:
+    TONES = {"chronos": "accent", "gradient_boosting": "teal", "greykite": "amber"}
+
+    def build(self, summary: ForecastSummary, events: pd.DataFrame) -> html.Div:
         cards = [
             (
-                "Champion MAE",
+                "Best 30 day MAE",
                 Formats.decimal(summary.champion_mae),
-                f"Naive {Formats.decimal(summary.baseline_mae)} \u00b7 {Formats.percent(summary.improvement, 2)} lower",
+                f"{ForecastModels.name(ForecastModels.CHAMPION)} \u00b7 naive {Formats.decimal(summary.baseline_mae)} "
+                f"\u00b7 {Formats.percent(summary.improvement, 2)} lower",
                 "accent",
             ),
-            (
-                "Champion MAPE",
-                Formats.percent(summary.champion_mape / 100, 2),
-                f"Naive {Formats.percent(summary.baseline_mape / 100, 2)} \u00b7 WAPE "
-                f"{Formats.percent(summary.champion_wape / 100, 2)}",
-                "teal",
-            ),
+            *[self.event_card(event) for event in events.itertuples()],
             (
                 "Interval coverage",
                 Formats.percent(summary.coverage),
-                f"Actuals inside the 80% band \u00b7 {Formats.count(summary.coverage_dates)} dates",
+                f"Backtest actuals inside the 80% band \u00b7 {Formats.count(summary.coverage_dates)} dates",
                 "amber",
-            ),
-            (
-                "Backtest dates",
-                Formats.count(summary.as_of_dates),
-                f"{Formats.date(summary.first_as_of)} to {Formats.date(summary.last_as_of)} \u00b7 "
-                f"{summary.horizon_days} days ahead",
-                "muted",
             ),
             (
                 "Latest production run",
@@ -45,6 +37,15 @@ class KpiCards:
             ),
         ]
         return html.Div([self.card(*card) for card in cards], className="kpi-cards")
+
+    @staticmethod
+    def event_card(event) -> tuple[str, str, str, str]:
+        winner = f"{ForecastModels.name(event.model)} v{event.model_version}"
+        title = f"Days {int(event.first_day)} to {int(event.last_day)}"
+        if event.improvement > 0:
+            tone = KpiCards.TONES.get(event.model, "muted")
+            return title, f"+{Formats.percent(event.improvement, 2)}", f"{winner} against naive", tone
+        return title, winner, "No champion beat naive by 1%", "muted"
 
     @staticmethod
     def run_detail(summary: ForecastSummary) -> str:

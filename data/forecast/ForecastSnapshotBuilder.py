@@ -24,7 +24,11 @@ class ForecastSnapshotBuilder:
         forecast_actuals.parquet           live forecasts whose target date has a price
         forecast_accuracy.parquet          the source accuracy view
         forecast_accuracy_rolling.parquet  the source rolling accuracy view
-        metadata.json                      row counts, date ranges and the latest run
+        tournament_standings.parquet       every contender's blended score per horizon event
+        event_winners.parquet              the winner of each horizon event
+        challenger_trials.parquet          each family's challenger and its trial progress
+        promotion_history.parquet          every challenger that took a title
+        metadata.json                      row counts, date ranges, the latest run and tournament
     """
 
     BACKTEST_FILE = "backtest_forecasts.parquet"
@@ -33,6 +37,10 @@ class ForecastSnapshotBuilder:
     ACTUALS_FILE = "forecast_actuals.parquet"
     ACCURACY_FILE = "forecast_accuracy.parquet"
     ROLLING_FILE = "forecast_accuracy_rolling.parquet"
+    STANDINGS_FILE = "tournament_standings.parquet"
+    EVENTS_FILE = "event_winners.parquet"
+    TRIALS_FILE = "challenger_trials.parquet"
+    PROMOTIONS_FILE = "promotion_history.parquet"
     METADATA_FILE = "metadata.json"
 
     BACKTEST_COLUMNS = [
@@ -75,6 +83,75 @@ class ForecastSnapshotBuilder:
         "error",
         "filled_at",
     ]
+    STANDING_COLUMNS = [
+        "as_of_date",
+        "horizon_bucket",
+        "stage",
+        "run_id",
+        "family",
+        "role",
+        "model",
+        "model_version",
+        "registered_model",
+        "prod_days",
+        "prod_mae",
+        "backtest_mae",
+        "backtest_source",
+        "prod_weight",
+        "blended_mae",
+        "baseline_mae",
+        "improvement",
+        "rules_passed",
+        "qualified",
+        "rank",
+        "is_winner",
+    ]
+    EVENT_COLUMNS = [
+        "as_of_date",
+        "horizon_bucket",
+        "run_id",
+        "first_day",
+        "last_day",
+        "family",
+        "stage",
+        "model",
+        "model_version",
+        "registered_model",
+        "blended_mae",
+        "baseline_mae",
+        "improvement",
+        "qualified_count",
+        "reason",
+    ]
+    TRIAL_COLUMNS = [
+        "as_of_date",
+        "family",
+        "run_id",
+        "registered_model",
+        "champion_version",
+        "challenger_version",
+        "trial_started",
+        "trial_days",
+        "required_days",
+        "champion_mae",
+        "challenger_mae",
+        "challenger_ahead",
+        "promoted",
+        "promoted_at",
+        "status",
+    ]
+    PROMOTION_COLUMNS = [
+        "as_of_date",
+        "family",
+        "registered_model",
+        "new_champion_version",
+        "former_champion_version",
+        "trial_days",
+        "champion_mae",
+        "challenger_mae",
+        "run_id",
+        "promoted_at",
+    ]
     SORT_KEYS = ["model", "as_of_date", "horizon_day"]
 
     # A bar loaded on its own trading day may still be trading, so it waits for the next refresh.
@@ -103,10 +180,18 @@ class ForecastSnapshotBuilder:
             actuals = self.read_table(connection, "forecast_actuals", self.ACTUAL_COLUMNS)
             accuracy = self.read_query(connection, "SELECT * FROM forecast_accuracy")
             rolling = self.read_query(connection, "SELECT * FROM forecast_accuracy_rolling")
+            standings = self.read_optional(connection, "tournament_standings", self.STANDING_COLUMNS)
+            events = self.read_optional(connection, "event_winners", self.EVENT_COLUMNS)
+            trials = self.read_optional(connection, "challenger_trials", self.TRIAL_COLUMNS)
+            promotions = self.read_optional(connection, "promotion_history", self.PROMOTION_COLUMNS)
 
         predictions = predictions.sort_values(["run_timestamp", "stage", "horizon_day"]).reset_index(drop=True)
         actuals = actuals.sort_values(["as_of_date", "stage", "horizon_day"]).reset_index(drop=True)
+        standings = standings.sort_values(["as_of_date", "horizon_bucket", "rank"]).reset_index(drop=True)
+        events = events.sort_values(["as_of_date", "first_day"]).reset_index(drop=True)
+        trials = trials.sort_values(["as_of_date", "family"]).reset_index(drop=True)
         metadata = self.build_metadata(backtest, prices, predictions, actuals)
+        metadata.update(self.tournament_metadata(standings, events, trials, promotions))
 
         self.folder.mkdir(parents=True, exist_ok=True)
         tables = {
@@ -116,6 +201,10 @@ class ForecastSnapshotBuilder:
             self.ACTUALS_FILE: actuals,
             self.ACCURACY_FILE: accuracy,
             self.ROLLING_FILE: rolling,
+            self.STANDINGS_FILE: standings,
+            self.EVENTS_FILE: events,
+            self.TRIALS_FILE: trials,
+            self.PROMOTIONS_FILE: promotions,
         }
         for file_name, table in tables.items():
             table.to_parquet(self.folder / file_name, index=False)
@@ -133,6 +222,11 @@ class ForecastSnapshotBuilder:
     def read_table(self, connection: sqlite3.Connection, table: str, columns: list[str]) -> pd.DataFrame:
         return self.read_query(connection, f"SELECT {', '.join(columns)} FROM {table}")
 
+    def read_optional(self, connection: sqlite3.Connection, table: str, columns: list[str]) -> pd.DataFrame:
+        """Read a table that older databases may not have yet. A missing table gives an empty frame."""
+        found = connection.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)).fetchone()
+        return self.read_table(connection, table, columns) if found else pd.DataFrame(columns=columns)
+
     def read_backtest(self, connection: sqlite3.Connection) -> pd.DataFrame:
         """Prefer the parquet export and check it against the database table when both exist."""
         table = self.read_table(connection, "backtest_forecasts", self.BACKTEST_COLUMNS)
@@ -148,10 +242,24 @@ class ForecastSnapshotBuilder:
             raise ValueError(f"Backtest export has {len(export)} rows but the database table has {len(table)}.")
         return export
 
+    @staticmethod
+    def tournament_metadata(
+        standings: pd.DataFrame, events: pd.DataFrame, trials: pd.DataFrame, promotions: pd.DataFrame
+    ) -> dict:
+        latest = str(events["as_of_date"].max()) if len(events) else None
+        return {
+            "tournament_as_of_date": latest,
+            "standing_rows": int(len(standings)),
+            "event_rows": int(len(events)),
+            "trial_rows": int(len(trials)),
+            "promotion_rows": int(len(promotions)),
+        }
+
     def build_metadata(
         self, backtest: pd.DataFrame, prices: pd.DataFrame, predictions: pd.DataFrame, actuals: pd.DataFrame
     ) -> dict:
-        latest = predictions.iloc[-1] if len(predictions) else None
+        published = predictions[predictions["stage"] == "production"]
+        latest = published.iloc[-1] if len(published) else None
         return {
             "built_at": datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
             "source": self.settings.natgas_source_folder.name,
@@ -164,6 +272,7 @@ class ForecastSnapshotBuilder:
             "last_price_date": str(prices["date"].max()) if len(prices) else None,
             "prediction_rows": int(len(predictions)),
             "prediction_runs": int(predictions["run_id"].nunique()),
+            "prediction_stages": sorted(predictions["stage"].unique().tolist()),
             "latest_run_id": None if latest is None else str(latest["run_id"]),
             "latest_run_as_of_date": None if latest is None else str(latest["as_of_date"]),
             "latest_run_timestamp_utc": None if latest is None else str(latest["run_timestamp"]),

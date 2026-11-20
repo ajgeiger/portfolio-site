@@ -6,14 +6,20 @@ from dash import Dash
 
 from analytics.forecast.BacktestWindow import BacktestWindow
 from analytics.forecast.ForecastAccuracy import ForecastAccuracy
+from analytics.forecast.PredictionRuns import PredictionRuns
+from analytics.forecast.TournamentResults import TournamentResults
 from components.forecast.BacktestFanChart import BacktestFanChart
+from components.forecast.BacktestScoreTable import BacktestScoreTable
+from components.forecast.ChallengerTrialsTable import ChallengerTrialsTable
+from components.forecast.EventWinners import EventWinners
 from components.forecast.ForecastIds import ForecastIds
-from components.forecast.LeaderboardTable import LeaderboardTable
+from components.forecast.ForecastPathTable import ForecastPathTable
+from components.forecast.KpiCards import KpiCards
+from components.forecast.ProductionForecastChart import ProductionForecastChart
 from components.forecast.RunDetails import RunDetails
 from components.forecast.RunList import RunList
 from components.forecast.SectionHeading import SectionHeading
-from components.forecast.StagedForecastChart import StagedForecastChart
-from components.forecast.StagedRunTable import StagedRunTable
+from components.forecast.StandingsTable import StandingsTable
 from config.Settings import Settings
 from data.forecast.ForecastCache import ForecastCache
 from data.forecast.ForecastSnapshotBuilder import ForecastSnapshotBuilder
@@ -76,54 +82,98 @@ def test_fan_chart_leaves_out_the_band_where_there_is_none(cache_factory):
     assert next(trace for trace in figure.data if trace.name == "Naive").line.dash == "dot"
 
 
-def test_leaderboard_switches_to_a_horizon_bucket(cache_factory):
-    board = ForecastAccuracy.leaderboard(cache_factory().backtest())
-    text = text_of(LeaderboardTable().build(board, "days 1 to 5"))
-    assert "0.1000" in text and "0.5000" in text
-    assert "No backtest data" in text_of(LeaderboardTable().build(board, "days 16 to 30"))
+def tournament_of(cache: ForecastCache) -> TournamentResults:
+    return TournamentResults(cache.standings(), cache.events(), cache.trials())
 
 
-def test_staged_chart_shows_both_stages_with_versions(cache_factory):
+def run_of(cache: ForecastCache) -> pd.DataFrame:
+    return PredictionRuns(cache.predictions()).run("run1")
+
+
+def test_standings_table_switches_bucket_and_marks_the_winner(cache_factory):
+    results = tournament_of(cache_factory())
+    text = text_of(StandingsTable().build(results.standings("days 6 to 15")))
+    for expected in ("Winner", "Qualified", "In trials", "Baseline", "Below the 1% bar", "0.4000", "+4.76%"):
+        assert expected in text
+    late = StandingsTable().build(results.standings("days 16 to 30"))
+    assert "0.6100 \u00b7 40%" in text_of(late)
+    assert "is-top" in late.children[1].children[0].className
+    assert "Winner" not in text_of(StandingsTable().build(results.standings("all days")))
+    assert "No standings" in text_of(StandingsTable().build(results.standings("days 99")))
+
+
+def test_event_winners_and_trials_summarize_the_round(cache_factory):
+    results = tournament_of(cache_factory())
+    events = text_of(EventWinners().build(results.events()))
+    for expected in ("Days 1 to 5", "Naive v1", "No champion beat naive by 1%", "Gradient boosting v1", "Chronos-2 v1"):
+        assert expected in events
+    assert "4.76% better than naive" in events
+    trials = text_of(ChallengerTrialsTable().build(results.trials()))
+    assert "12 of 60 days" in trials and "In trials" in trials
+    assert "No challengers" in text_of(ChallengerTrialsTable().build(results.trials().iloc[0:0]))
+
+
+def test_kpi_cards_show_each_event_result(cache_factory):
+    page = PriceForecastPage(make_forecast_project(), cache_factory())
+    text = text_of(KpiCards().build(page.summary, page.tournament.events()))
+    for expected in (
+        "Best 30 day MAE",
+        "0.1000",
+        "Days 1 to 5",
+        "Naive v1",
+        "+4.76%",
+        "+7.69%",
+        "Latest production run",
+    ):
+        assert expected in text
+
+
+def test_production_chart_draws_one_segment_per_event_and_optional_champions(cache_factory):
     cache = cache_factory()
-    run = cache.predictions()
+    run = run_of(cache)
     history = BacktestWindow(cache.backtest(), cache.prices()).history(run["as_of_date"].max(), 20)
-    names = trace_names(StagedForecastChart().build(history, run))
-    assert "Production 80% band" in names
-    assert "Production: Chronos-2 v8" in names
-    assert "Staging: Gradient boosting v9" in names
+    names = trace_names(ProductionForecastChart().build(history, run))
+    assert names == [
+        "80% band",
+        "History",
+        "Naive, days 1 to 5",
+        "Gradient boosting, days 6 to 15",
+        "Chronos-2, days 16 to 20",
+    ]
+    band = next(trace for trace in ProductionForecastChart().build(history, run).data if trace.name == "80% band")
+    assert len(band.x) == 5
+    compared = trace_names(ProductionForecastChart().build(history, run, ["greykite:champion", "baseline:naive"]))
+    assert "Greykite champion path" in compared and "Naive baseline path" in compared
 
 
 def test_charts_fall_back_to_a_note_when_empty(cache_factory):
     cache = cache_factory()
-    assert StagedForecastChart().build(cache.prices(), cache.predictions().iloc[0:0]).layout.annotations
+    assert ProductionForecastChart().build(cache.prices(), cache.predictions().iloc[0:0]).layout.annotations
     window = BacktestWindow(cache.backtest().iloc[0:0], cache.prices().iloc[0:0])
     assert BacktestFanChart().build(window, pd.Timestamp(AS_OF_DATES[0]), ["chronos"]).layout.annotations
 
 
-def test_run_list_has_one_clickable_row_per_run_with_day_one_values(cache_factory):
+def test_run_list_has_one_clickable_row_per_published_run(cache_factory):
     cache = cache_factory()
-    runs = (
-        cache.predictions()
-        .groupby("run_id", as_index=False)
-        .agg(as_of_date=("as_of_date", "max"), run_timestamp=("run_timestamp", "min"))
-    )
+    runs = PredictionRuns(cache.predictions()).runs()
     listing = RunList().build(runs, cache.predictions(), "run1")
     header, row = listing.children
     assert row.id == {"type": ForecastIds.RUN_ROW, "run": "run1"}
     assert row.className == RunList.SELECTED_CLASS
-    assert "3.510" in text_of(row)
+    assert "3.510" in text_of(row) and "3.600" in text_of(row)
     assert RunList.class_name(False) == RunList.ROW_CLASS
     assert "No production runs" in text_of(RunList().build(runs.iloc[0:0], cache.predictions(), None))
 
 
 def test_run_details_and_path_table_describe_the_run(cache_factory):
-    run = cache_factory().predictions()
-    details = text_of(RunDetails().build(run))
-    for expected in ("run1", "Mar 15, 2024", "6 trading days", "Chronos-2 v8", "Gradient boosting v9"):
+    cache = cache_factory()
+    details = text_of(RunDetails().build(run_of(cache)))
+    for expected in ("run1", "Mar 15, 2024", "20 trading days", "Days 6 to 15", "Gradient boosting v1", "Chronos-2 v1"):
         assert expected in details
-    table = text_of(StagedRunTable().build(run))
-    assert "3.300 to 3.700" in table
-    assert "Staging" in table
+    table = text_of(ForecastPathTable().build(PredictionRuns(cache.predictions()).production("run1")))
+    for expected in ("Day 1", "Day 6", "Day 10", "Day 16", "Naive v1", "3.300 to 3.700"):
+        assert expected in table
+    assert "Day 30" not in table
 
 
 def test_section_heading_has_no_number():
@@ -131,21 +181,22 @@ def test_section_heading_has_no_number():
     assert text_of(heading).split() == ["Model", "leaderboard", "Lead."]
 
 
-def test_leaderboard_marks_the_best_value_and_compares_with_naive(cache_factory):
+def test_backtest_scores_mark_the_best_value_and_compare_with_naive(cache_factory):
     board = ForecastAccuracy.leaderboard(cache_factory().backtest())
-    table = LeaderboardTable().build(board)
-    rows = table.children[1].children
-    first = rows[0].children
+    table = BacktestScoreTable().build(board)
+    first = table.children[1].children[0].children
     assert text_of(first[0]).strip() == "Chronos-2"
-    assert "is-best" in first[2].className
+    assert "is-best" in first[1].className
     assert text_of(first[-1]) == "66.67% better"
     assert "Baseline" in text_of(table)
+    assert "0.1000" in text_of(BacktestScoreTable().build(board, "days 1 to 5"))
+    assert "No backtest data" in text_of(BacktestScoreTable().build(board, "days 16 to 30"))
 
 
 def test_page_order_and_copy(cache_factory):
     page = PriceForecastPage(make_forecast_project(), cache_factory())
     text = text_of(page.layout())
-    titles = ["Model leaderboard", "Active predictions in production", "Model selection backtests"]
+    titles = ["Model leaderboard", "Challenger trials", "Active predictions in production", "Model selection backtests"]
     positions = [text.index(title) for title in titles]
     assert positions == sorted(positions)
     assert "View production forecast" in text
@@ -154,6 +205,7 @@ def test_page_order_and_copy(cache_factory):
         "Error by model",
         "Error by day ahead",
         "Staged predictions",
+        "Staging",
         "How it runs",
         "Caveats",
         "pending",
@@ -171,16 +223,32 @@ def test_clicking_a_run_selects_it(cache_factory):
     page = PriceForecastPage(make_forecast_project(), cache_factory())
     assert page.clicked_run({"type": ForecastIds.RUN_ROW, "run": "run9"}, "run1") == "run9"
     assert page.clicked_run(None, "run1") == "run1"
-    chart, table, details = page.run_view("run1")
-    assert "Production: Chronos-2 v8" in trace_names(chart)
+    chart, table, details = page.run_view("run1", ["chronos:champion"])
+    assert "Chronos-2 champion path" in trace_names(chart)
     assert "run1" in text_of(details)
+    assert "Day 16" in text_of(table)
 
 
-def test_page_highlights_are_read_from_the_data(cache_factory):
+def test_page_highlights_and_findings_are_read_from_the_data(cache_factory):
     page = PriceForecastPage(make_forecast_project(), cache_factory())
-    assert page.highlights()[0] == ("66.67%", "lower MAE than naive")
-    assert page.highlights()[1] == ("3", "backtest dates")
-    assert "latest run is as of Mar 15, 2024" in " ".join(page.key_findings())
+    assert page.highlights()[0] == ("3", "model families plus a naive baseline")
+    assert page.highlights()[1] == ("3", "horizon events in the production forecast")
+    assert page.highlights()[2] == ("3", "backtest dates behind every score")
+    findings = " ".join(page.key_findings())
+    assert findings.startswith("Chronos-2, gradient boosting and Greykite compete")
+    assert "naive holds days 1 to 5" in findings
+    assert "gradient boosting wins days 6 to 15 (4.76% better than naive)" in findings
+    assert "challengers are at days 0 to 12" in findings
+
+
+def test_page_without_tournament_tables_still_renders(tmp_path):
+    source = write_source(tmp_path / "source", tournament=False)
+    settings = Settings(natgas_source_folder=source, natgas_cache_folder=tmp_path / "cache")
+    ForecastSnapshotBuilder(settings).build()
+    page = PriceForecastPage(make_forecast_project(), ForecastCache(settings))
+    text = text_of(page.layout())
+    assert "No tournament results yet" in text and "No challengers in trials" in text
+    page.register_callbacks(Dash(__name__))
 
 
 def test_page_without_a_snapshot_still_renders(tmp_path):
