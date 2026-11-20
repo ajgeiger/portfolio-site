@@ -62,6 +62,14 @@ class ForecastAccuracy:
         return table.sort_values(["model", "horizon_bucket"]).reset_index(drop=True)
 
     @staticmethod
+    def bucket_scores(leaderboard: pd.DataFrame, model: str, bucket: str) -> pd.Series | None:
+        """One model's error measures for one horizon bucket, or None when the leaderboard has no such row."""
+        if leaderboard.empty:
+            return None
+        rows = leaderboard[(leaderboard["model"] == model) & (leaderboard["horizon_bucket"] == bucket)]
+        return None if rows.empty else rows.iloc[0]
+
+    @staticmethod
     def improvement(score: float, baseline: float) -> float:
         """Share by which a score beats the baseline, positive when lower is better."""
         return 1 - score / baseline if baseline else 0.0

@@ -60,8 +60,8 @@ class PriceForecastPage(AbstractProjectPage):
             [
                 header,
                 KpiCards().build(self.summary),
-                self.leaderboard_section(),
                 self.production_section(),
+                self.leaderboard_section(),
                 self.backtest_section(),
             ],
             className="forecast project-page",
@@ -95,7 +95,7 @@ class PriceForecastPage(AbstractProjectPage):
                     "on blended MAE, and the lowest qualified score wins the event."
                     + (f" Results as of {Formats.date(as_of)}." if as_of is not None else ""),
                 ),
-                EventWinners().build(self.tournament.events()),
+                EventWinners().build(self.tournament.events(), self.leaderboard),
                 html.Details(
                     [
                         self.scoreboard_summary(),
@@ -143,7 +143,7 @@ class PriceForecastPage(AbstractProjectPage):
     def standings_note(self) -> str:
         note = (
             "Blended MAE weights a model's last 30 matured production days against its backtest MAE, in dollars per "
-            "MMBtu. vs naive is the change in blended MAE against the baseline."
+            "MMBtu."
         )
         if self.tournament.production_days() == 0:
             note += " No forecast has matured in production yet, so every blended MAE equals the backtest MAE."
@@ -313,7 +313,7 @@ class PriceForecastPage(AbstractProjectPage):
                     [
                         html.H3("Backtest accuracy over all 30 days"),
                         html.Div(
-                            "Best configuration per family. MAE, RMSE and bias in dollars per MMBtu, MAPE and WAPE in "
+                            "Best configuration per family. MAE and bias in dollars per MMBtu, MAPE and WAPE in "
                             "percent. Bias is forecast minus actual. The best value in each column is marked.",
                             className="panel-subtitle",
                         ),
@@ -378,7 +378,9 @@ class PriceForecastPage(AbstractProjectPage):
             else pd.DataFrame(columns=["date", "high"])
         )
         chart = ProductionForecastChart().build(history, run, compare)
-        models = ForecastModelCard().build(self.runs.production(run_id), self.tournament.events_on(as_of))
+        models = ForecastModelCard().build(
+            self.runs.production(run_id), self.tournament.events_on(as_of), self.leaderboard
+        )
         return chart, models, RunDetails().build(run)
 
     def fan_stats(self, as_of: pd.Timestamp, models: list[str]) -> list:
@@ -407,7 +409,7 @@ class PriceForecastPage(AbstractProjectPage):
             (str(len(self.tournament.families())), "model families plus a naive baseline"),
             (str(len(self.tournament.events())), "horizon events in the production forecast"),
             (Formats.count(summary.as_of_dates), "backtest dates behind every score"),
-            (Formats.percent(TournamentResults.MIN_IMPROVEMENT, 0), "margin a champion needs over naive"),
+            (str(summary.horizon_days), "trading days in each production forecast"),
         ]
 
     def key_findings(self) -> list[str]:
@@ -418,34 +420,28 @@ class PriceForecastPage(AbstractProjectPage):
         findings = []
         families = [ForecastModels.prose_name(family) for family in self.tournament.families()]
         if families:
-            names = self.joined(families)
+            names = self.joined([*families, "naive"])
             findings.append(
-                f"{names[:1].upper()}{names[1:]} compete with a naive baseline in three horizon events every trading "
-                f"morning. A champion has to beat naive by at least "
-                f"{Formats.percent(TournamentResults.MIN_IMPROVEMENT, 0)} on a blended production and backtest "
-                "score to win an event."
+                f"Every trading morning {names} compete across three horizon events, and the selected segments are "
+                f"stitched into the {summary.horizon_days} day production forecast."
             )
         events = self.tournament.events()
         if len(events):
-            results = [self.event_result(event) for event in events.itertuples()]
-            findings.append(
-                f"In the latest round, as of {Formats.date(self.tournament.as_of_date)}, {self.joined(results)}. "
-                "The winning segments make up the production forecast."
-            )
+            serving = [self.event_result(event) for event in events.itertuples()]
+            findings.append(f"In production as of {Formats.date(self.tournament.as_of_date)}, {self.joined(serving)}.")
         findings.append(
-            f"Over all 30 days {ForecastModels.name(ForecastModels.CHAMPION)} has the lowest backtest error, MAE "
-            f"{Formats.decimal(summary.champion_mae)} against {Formats.decimal(summary.baseline_mae)} for naive "
-            f"({Formats.percent(summary.improvement, 2)} lower)."
+            f"Across all {Formats.count(summary.as_of_dates)} rolling backtest dates, over 30 trading days, "
+            f"{ForecastModels.name(ForecastModels.CHAMPION)} leads with "
+            f"MAE {Formats.error('mae', summary.champion_mae)}, "
+            f"MAPE {Formats.error('mape', summary.champion_mape)}, WAPE {Formats.error('wape', summary.champion_wape)} "
+            f"and bias {Formats.error('bias', summary.champion_bias)}."
         )
         return findings
 
     @staticmethod
     def event_result(event) -> str:
         days = f"days {int(event.first_day)} to {int(event.last_day)}"
-        name = ForecastModels.prose_name(event.model)
-        if event.improvement > 0:
-            return f"{name} wins {days} ({Formats.percent(event.improvement, 2)} better than naive)"
-        return f"{name} holds {days} because no champion beat it by 1%"
+        return f"{ForecastModels.name(event.model)} v{event.model_version} serves {days}"
 
     @staticmethod
     def joined(items: list[str]) -> str:

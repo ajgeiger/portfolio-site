@@ -9,6 +9,7 @@ from analytics.forecast.ForecastSummary import ForecastSummary
 from analytics.forecast.PredictionRuns import PredictionRuns
 from analytics.forecast.TournamentResults import TournamentResults
 from config.ForecastModels import ForecastModels
+from config.Formats import Formats
 from tests.forecast_tables import (
     AS_OF_DATES,
     make_actuals,
@@ -161,3 +162,19 @@ def test_stage_names_cover_the_tournament_stages():
     assert ForecastModels.stage_name("baseline:naive") == "Naive baseline"
     assert ForecastModels.stage_name("production") == "Production"
     assert ForecastModels.prose_name("gradient_boosting") == "gradient boosting"
+
+
+def test_bucket_scores_read_one_model_and_horizon():
+    board = ForecastAccuracy.leaderboard(typed(make_backtest()))
+    scores = ForecastAccuracy.bucket_scores(board, "chronos", "days 1 to 5")
+    assert scores["mae"] == pytest.approx(0.10)
+    assert scores["bias"] == pytest.approx(0.10)
+    assert ForecastAccuracy.bucket_scores(board, "chronos", "days 16 to 30") is None
+    assert ForecastAccuracy.bucket_scores(board.iloc[0:0], "chronos", "days 1 to 5") is None
+
+
+def test_error_formats_follow_each_measure():
+    assert Formats.error("mae", 0.51919) == "0.5192"
+    assert Formats.error("mape", 13.1234) == "13.12%"
+    assert Formats.error("wape", 13.6512) == "13.65%"
+    assert Formats.error("bias", -0.04201) == "-0.0420"

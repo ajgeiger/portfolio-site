@@ -9,7 +9,7 @@ from config.Formats import Formats
 
 
 class StandingsTable:
-    """Rank, model, blended score with its backtest and production parts, the change against naive and a status."""
+    """Rank, model, blended score with its backtest and production parts, and a status."""
 
     BADGES = {
         "Winner": "is-winner",
@@ -32,7 +32,6 @@ class StandingsTable:
                     html.Th("Blended MAE", className="number"),
                     html.Th("Backtest MAE", className="number"),
                     html.Th("Production MAE, weight", className="number"),
-                    html.Th("vs naive", className="number"),
                     html.Th("Status"),
                 ]
             )
@@ -66,7 +65,6 @@ class StandingsTable:
                 html.Td(
                     self.production(row), className="number" + (" role-cell" if int(row["prod_days"]) == 0 else "")
                 ),
-                html.Td(self.versus(row), className="number"),
                 html.Td(html.Span(status, className=f"badge {self.BADGES[status]}")),
             ],
             className="is-top" if status == "Winner" else None,
@@ -79,9 +77,3 @@ class StandingsTable:
         if days == 0:
             return f"0 days · {weight}"
         return f"{Formats.decimal(row['prod_mae'])} · {weight}"
-
-    @staticmethod
-    def versus(row: pd.Series) -> str:
-        if row["role"] == "baseline":
-            return "Baseline"
-        return f"{float(row['improvement']) * 100:+.2f}%"

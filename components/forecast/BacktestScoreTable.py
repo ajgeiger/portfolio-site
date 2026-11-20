@@ -9,22 +9,17 @@ from config.Formats import Formats
 
 
 class BacktestScoreTable:
-    """A rounded table, best value in each column marked, with each model's change against naive."""
+    """A rounded table of MAE, MAPE, WAPE and bias per model, with the best value in each column marked."""
 
-    COLUMNS = (("mae", "MAE"), ("rmse", "RMSE"), ("mape", "MAPE"), ("wape", "WAPE"), ("bias", "Bias"))
+    COLUMNS = (("mae", "MAE"), ("mape", "MAPE"), ("wape", "WAPE"), ("bias", "Bias"))
 
     def build(self, leaderboard: pd.DataFrame, bucket: str = ForecastAccuracy.ALL_DAYS) -> html.Table:
         rows = leaderboard[leaderboard["horizon_bucket"] == bucket].set_index("model")
         if rows.empty:
             return html.Div("No backtest data.", className="panel-note")
-        baseline = rows.loc[ForecastModels.BASELINE, "mae"] if ForecastModels.BASELINE in rows.index else None
         best = {key: (rows[key].abs().idxmin() if key == "bias" else rows[key].idxmin()) for key, _ in self.COLUMNS}
         header = html.Thead(
-            html.Tr(
-                [html.Th("Model")]
-                + [html.Th(label, className="number") for _, label in self.COLUMNS]
-                + [html.Th("MAE vs naive", className="number")]
-            )
+            html.Tr([html.Th("Model")] + [html.Th(label, className="number") for _, label in self.COLUMNS])
         )
         body = []
         ordered = sorted(ForecastModels.ordered(rows.index), key=lambda model: rows.loc[model, "mae"])
@@ -39,22 +34,7 @@ class BacktestScoreTable:
                 ),
             ]
             for key, _ in self.COLUMNS:
-                value = rows.loc[model, key]
-                text = (
-                    Formats.signed(value)
-                    if key == "bias"
-                    else Formats.percent(value / 100, 2)
-                    if key in ("mape", "wape")
-                    else Formats.decimal(value)
-                )
+                text = Formats.error(key, rows.loc[model, key])
                 cells.append(html.Td(text, className="number" + (" is-best" if best[key] == model else "")))
-            cells.append(html.Td(self.versus(rows.loc[model, "mae"], baseline, model), className="number"))
             body.append(html.Tr(cells))
         return html.Table([header, html.Tbody(body)], className="deck-table compact")
-
-    @staticmethod
-    def versus(mae: float, baseline: float | None, model: str) -> str:
-        if baseline is None or model == ForecastModels.BASELINE:
-            return "Baseline"
-        change = ForecastAccuracy.improvement(mae, baseline)
-        return f"{Formats.percent(abs(change), 2)} {'better' if change >= 0 else 'worse'}"

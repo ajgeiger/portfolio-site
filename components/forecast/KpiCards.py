@@ -8,34 +8,33 @@ from config.Formats import Formats
 
 
 class KpiCards:
-    """Four cards for the best model over all 30 backtest days: MAPE, WAPE, MAE and bias, each against naive."""
+    """Four cards for the leading model over all 30 backtest days: MAE, MAPE, WAPE and bias, each beside naive."""
 
     def build(self, summary: ForecastSummary) -> html.Div:
         champion = ForecastModels.name(ForecastModels.CHAMPION)
         cards = [
             (
-                "MAPE",
-                Formats.percent(summary.champion_mape / 100, 2),
-                f"{champion} \u00b7 naive {Formats.percent(summary.baseline_mape / 100, 2)}",
+                "MAE",
+                Formats.error("mae", summary.champion_mae),
+                f"{champion} \u00b7 naive {Formats.error('mae', summary.baseline_mae)}",
                 "accent",
             ),
             (
-                "WAPE",
-                Formats.percent(summary.champion_wape / 100, 2),
-                f"{champion} \u00b7 naive {Formats.percent(summary.baseline_wape / 100, 2)}",
+                "MAPE",
+                Formats.error("mape", summary.champion_mape),
+                f"{champion} \u00b7 naive {Formats.error('mape', summary.baseline_mape)}",
                 "teal",
             ),
             (
-                "MAE",
-                Formats.decimal(summary.champion_mae),
-                f"{champion} \u00b7 naive {Formats.decimal(summary.baseline_mae)} \u00b7 "
-                f"{Formats.percent(summary.improvement, 2)} lower",
+                "WAPE",
+                Formats.error("wape", summary.champion_wape),
+                f"{champion} \u00b7 naive {Formats.error('wape', summary.baseline_wape)}",
                 "amber",
             ),
             (
                 "Bias",
-                Formats.signed(summary.champion_bias),
-                f"{champion} \u00b7 forecast minus actual \u00b7 naive {Formats.signed(summary.baseline_bias)}",
+                Formats.error("bias", summary.champion_bias),
+                f"{champion} \u00b7 forecast minus actual \u00b7 naive {Formats.error('bias', summary.baseline_bias)}",
                 "navy",
             ),
         ]

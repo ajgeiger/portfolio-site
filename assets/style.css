@@ -518,8 +518,7 @@ a { color: var(--accent); }
 .event-days { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
 .event-model { display: flex; align-items: center; font-size: 17px; font-weight: 800; color: var(--navy); margin: 6px 0 2px; }
 .event-detail { font-size: 12px; color: var(--ink); }
-.event-versus { font-size: 12px; color: var(--muted); margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--gray-soft, #E9ECF1); }
-.event-versus.is-up { color: var(--teal); font-weight: 700; }
+.event-measures { font-size: 12px; color: var(--muted); margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--gray-soft, #E9ECF1); }
 .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: var(--radius-pill); white-space: nowrap; background: #EEF1F5; color: var(--muted); }
 .badge.is-winner { background: var(--navy); color: #FFFFFF; }
 .badge.is-qualified { background: #D7F2EC; color: var(--teal); }
@@ -562,8 +561,12 @@ a { color: var(--accent); }
 
 /* Forecast model card */
 .model-events { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
-.model-event { border-left: 4px solid var(--model-color); background: color-mix(in srgb, var(--model-color) 8%, #FFFFFF); border-radius: var(--radius-input); padding: 10px 14px; }
-.model-event-days { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; }
-.model-event-name { display: flex; align-items: center; font-size: 16px; font-weight: 800; color: var(--navy); margin: 3px 0 2px; }
-.model-event-detail { font-size: 12px; color: var(--ink); }
+.model-event { border-left: 4px solid var(--model-color); background: color-mix(in srgb, var(--model-color) 8%, #FFFFFF); border-radius: var(--radius-input); padding: 9px 14px; }
+.model-event-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.model-event-name { display: flex; align-items: center; font-size: 15px; font-weight: 800; color: var(--navy); white-space: nowrap; }
+.model-event-days { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; white-space: nowrap; }
+.model-event-detail { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.model-measures { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 6px 0 0; }
+.model-measure dt { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; }
+.model-measure dd { margin: 1px 0 0; font-size: 13px; font-weight: 700; color: var(--navy); font-variant-numeric: tabular-nums; }
 .deck-stack > .panel:last-child { flex: 1; }

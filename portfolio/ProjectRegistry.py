@@ -63,7 +63,9 @@ class ProjectRegistry:
                     "tournament: Chronos-2, gradient boosting and Greykite compete with a naive baseline over three "
                     "horizons."
                 ),
-                question="Can a model forecast natural gas futures better than repeating the last price?",
+                question=(
+                    "How do forecasting models compete, qualify and serve daily natural gas predictions in production?"
+                ),
                 data=(
                     "Public data only: the daily high of the front-month natural gas futures contract (Yahoo "
                     "Finance NG=F), weather in major gas-demand cities from Open-Meteo, and EIA weekly storage, "
@@ -72,8 +74,8 @@ class ProjectRegistry:
                 approach=(
                     "Each model family is trained and tuned in rolling backtests with no look-ahead, then registered "
                     "in MLflow as a champion and a challenger. Every trading morning the champions compete in three "
-                    "horizon events, a champion wins only by beating naive by at least 1%, and the event winners "
-                    "are stitched into one forecast."
+                    "horizon events, the event winners are stitched into one production forecast, and every model is "
+                    "evaluated with MAE, MAPE, WAPE and bias."
                 ),
                 tags=("Forecasting", "Time series", "MLflow", "Plotly Dash"),
                 thumbnail="images/natural-gas-price-forecast.png",

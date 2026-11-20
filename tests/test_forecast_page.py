@@ -19,6 +19,7 @@ from components.forecast.RunDetails import RunDetails
 from components.forecast.SectionHeading import SectionHeading
 from components.forecast.StandingsTable import StandingsTable
 from config.ForecastModels import ForecastModels
+from config.Formats import Formats
 from config.Settings import Settings
 from data.forecast.ForecastCache import ForecastCache
 from data.forecast.ForecastSnapshotBuilder import ForecastSnapshotBuilder
@@ -109,8 +110,9 @@ def run_of(cache: ForecastCache) -> pd.DataFrame:
 def test_standings_table_switches_bucket_and_marks_the_winner(cache_factory):
     results = tournament_of(cache_factory())
     text = text_of(StandingsTable().build(results.standings("days 6 to 15")))
-    for expected in ("Winner", "Qualified", "In trials", "Baseline", "Below the 1% bar", "0.4000", "+4.76%"):
+    for expected in ("Winner", "Qualified", "In trials", "Baseline", "Below the 1% bar", "0.4000"):
         assert expected in text
+    assert "vs naive" not in text.lower() and "+4.76%" not in text
     late = StandingsTable().build(results.standings("days 16 to 30"))
     assert "0.6100 \u00b7 40%" in text_of(late)
     assert "is-top" in late.children[1].children[0].className
@@ -118,32 +120,36 @@ def test_standings_table_switches_bucket_and_marks_the_winner(cache_factory):
     assert "No standings" in text_of(StandingsTable().build(results.standings("days 99")))
 
 
-def test_event_winners_show_each_winner_and_its_margin_over_naive(cache_factory):
-    results = tournament_of(cache_factory())
-    events = text_of(EventWinners().build(results.events()))
+def test_event_winners_show_each_winner_with_its_error_measures(cache_factory):
+    cache = cache_factory()
+    results = tournament_of(cache)
+    board = ForecastAccuracy.leaderboard(cache.backtest())
+    cards = EventWinners().build(results.events(), board)
+    events = text_of(cards)
     for expected in (
         "Days 1 to 5",
         "Naive v1",
         "Baseline",
-        "No champion beat naive by 1%",
-        "Days 6 to 15",
         "Gradient boosting v1",
         "Champion \u00b7 blended MAE 0.4000",
-        "Naive 0.4200 \u00b7 4.76% better",
-        "Chronos-2 v1",
     ):
         assert expected in events
-    assert "No tournament results" in text_of(EventWinners().build(results.events().iloc[0:0]))
+    scores = ForecastAccuracy.bucket_scores(board, "gradient_boosting", "days 6 to 15")
+    expected = f"MAPE {Formats.error('mape', scores['mape'])} \u00b7 WAPE {Formats.error('wape', scores['wape'])}"
+    assert expected + " \u00b7 Bias +0.2000" in events
+    assert "No backtest scores for this horizon" in text_of(cards.children[2])
+    assert "better" not in events and "1%" not in events
+    assert "No tournament results" in text_of(EventWinners().build(results.events().iloc[0:0], board))
 
 
-def test_kpi_cards_focus_on_mape_wape_mae_and_bias(cache_factory):
+def test_kpi_cards_focus_on_mae_mape_wape_and_bias(cache_factory):
     page = PriceForecastPage(make_forecast_project(), cache_factory())
     cards = KpiCards().build(page.summary).children
-    assert [text_of(card.children[0]) for card in cards] == ["MAPE", "WAPE", "MAE", "Bias"]
+    assert [text_of(card.children[0]) for card in cards] == ["MAE", "MAPE", "WAPE", "Bias"]
     text = text_of(KpiCards().build(page.summary))
-    for expected in ("0.1000", "naive 0.3000", "66.67% lower", "+0.1000", "forecast minus actual", "naive +0.3000"):
+    for expected in ("0.1000", "naive 0.3000", "+0.1000", "forecast minus actual", "naive +0.3000"):
         assert expected in text
-    for removed in ("Days 1 to 5", "coverage", "band", "Latest production run"):
+    for removed in ("Days 1 to 5", "coverage", "band", "Latest production run", "lower", "better"):
         assert removed not in text
 
 
@@ -188,29 +194,42 @@ def test_run_details_stay_compact(cache_factory):
         assert expected in text_of(details)
 
 
-def test_forecast_model_card_highlights_the_winner_of_each_event(cache_factory):
+def test_forecast_model_card_highlights_the_model_serving_each_event(cache_factory):
     cache = cache_factory()
+    board = ForecastAccuracy.leaderboard(cache.backtest())
     production = PredictionRuns(cache.predictions()).production("run1")
     events = tournament_of(cache).events_on(pd.Timestamp("2024-03-15"))
-    card = ForecastModelCard().build(production, events)
-    rows = card.children
-    assert [text_of(row.children[0]) for row in rows] == ["Days 1 to 5", "Days 6 to 15", "Days 16 to 30"]
-    assert [text_of(row.children[1]).strip() for row in rows] == ["Naive v1", "Gradient boosting v1", "Chronos-2 v1"]
+    rows = ForecastModelCard().build(production, events, board).children
+    heads = [row.children[0] for row in rows]
+    assert [text_of(head.children[0]).strip() for head in heads] == [
+        "Naive v1",
+        "Gradient boosting v1",
+        "Chronos-2 v1",
+    ]
+    assert [text_of(head.children[1]) for head in heads] == [
+        "Days 1 to 5 \u00b7 Baseline",
+        "Days 6 to 15 \u00b7 Champion",
+        "Days 16 to 30 \u00b7 Champion",
+    ]
     assert rows[0].style == {"--model-color": ForecastModels.color("naive")}
     assert rows[2].style == {"--model-color": ForecastModels.color("chronos")}
-    assert text_of(rows[0].children[2]) == "Baseline \u00b7 blended MAE 0.2000 \u00b7 no champion beat naive by 1%"
-    assert text_of(rows[1].children[2]) == "Champion \u00b7 blended MAE 0.4000 \u00b7 4.76% better than naive"
+    measures = rows[1].children[1]
+    assert [text_of(item.children[0]) for item in measures.children] == ["MAE", "MAPE", "WAPE", "Bias"]
+    assert text_of(measures.children[0].children[1]) == "0.2000"
+    assert text_of(measures.children[3].children[1]) == "+0.2000"
+    assert "No backtest scores for this horizon" in text_of(rows[2])
+    assert "better" not in text_of(rows[0]) and "1%" not in text_of(rows[0])
 
 
 def test_forecast_model_card_falls_back_to_the_production_rows(cache_factory):
     cache = cache_factory()
+    board = ForecastAccuracy.leaderboard(cache.backtest())
     production = PredictionRuns(cache.predictions()).production("run1")
-    card = ForecastModelCard().build(production, cache.events().iloc[0:0])
-    text = text_of(card)
-    assert "Days 16 to 20" in text and "Gradient boosting v1" in text
-    assert "Baseline \u00b7 from the production forecast" in text
-    assert "blended MAE" not in text
-    assert "No production runs" in text_of(ForecastModelCard().build(production.iloc[0:0], cache.events()))
+    text = text_of(ForecastModelCard().build(production, cache.events().iloc[0:0], board))
+    assert "Days 16 to 20 \u00b7 Champion" in text and "Days 1 to 5 \u00b7 Baseline" in text
+    assert "Gradient boosting v1" in text
+    empty = ForecastModelCard().build(production.iloc[0:0], cache.events(), board)
+    assert "No production runs" in text_of(empty)
 
 
 def test_section_heading_has_no_number():
@@ -218,14 +237,15 @@ def test_section_heading_has_no_number():
     assert text_of(heading).split() == ["Model", "leaderboard", "Lead."]
 
 
-def test_backtest_scores_mark_the_best_value_and_compare_with_naive(cache_factory):
+def test_backtest_scores_show_only_mae_mape_wape_and_bias(cache_factory):
     board = ForecastAccuracy.leaderboard(cache_factory().backtest())
     table = BacktestScoreTable().build(board)
+    header = [text_of(cell) for cell in table.children[0].children.children]
+    assert header == ["Model", "MAE", "MAPE", "WAPE", "Bias"]
     first = table.children[1].children[0].children
     assert text_of(first[0]).strip() == "Chronos-2"
     assert "is-best" in first[1].className
-    assert text_of(first[-1]) == "66.67% better"
-    assert "Baseline" in text_of(table)
+    assert "RMSE" not in text_of(table) and "better" not in text_of(table)
     assert "0.1000" in text_of(BacktestScoreTable().build(board, "days 1 to 5"))
     assert "No backtest data" in text_of(BacktestScoreTable().build(board, "days 16 to 30"))
 
@@ -233,7 +253,7 @@ def test_backtest_scores_mark_the_best_value_and_compare_with_naive(cache_factor
 def test_page_order_and_copy(cache_factory):
     page = PriceForecastPage(make_forecast_project(), cache_factory())
     text = text_of(page.layout())
-    titles = ["Model leaderboard", "Model scoreboard", "Active predictions in production", "Model selection backtests"]
+    titles = ["Active predictions in production", "Model leaderboard", "Model scoreboard", "Model selection backtests"]
     positions = [text.index(title) for title in titles]
     assert positions == sorted(positions)
     assert "View production forecast" in text
@@ -249,6 +269,10 @@ def test_page_order_and_copy(cache_factory):
         "Inside the band",
         "Interval coverage",
         "Forecast path",
+        "RMSE",
+        "vs naive",
+        "% better",
+        "% lower",
         "How it runs",
         "Caveats",
         "pending",
@@ -293,10 +317,12 @@ def test_page_highlights_and_findings_are_read_from_the_data(cache_factory):
     assert page.highlights()[0] == ("3", "model families plus a naive baseline")
     assert page.highlights()[1] == ("3", "horizon events in the production forecast")
     assert page.highlights()[2] == ("3", "backtest dates behind every score")
+    assert page.highlights()[3] == ("6", "trading days in each production forecast")
     findings = " ".join(page.key_findings())
-    assert findings.startswith("Chronos-2, gradient boosting and Greykite compete")
-    assert "naive holds days 1 to 5" in findings
-    assert "gradient boosting wins days 6 to 15 (4.76% better than naive)" in findings
+    assert findings.startswith("Every trading morning Chronos-2, gradient boosting, Greykite and naive compete")
+    assert "In production as of Mar 15, 2024, Naive v1 serves days 1 to 5" in findings
+    assert "Chronos-2 leads with MAE 0.1000" in findings and "bias +0.1000" in findings
+    assert "better" not in findings and "1%" not in findings
     assert len(page.key_findings()) == 3
     assert "band" not in findings and "challenger" not in findings
 
